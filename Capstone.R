@@ -13,7 +13,7 @@ library(GPArotation)
 
 #import data
 print("Import Data")
-data_default <- read.csv("D:/NYU/Curriculum/CapstoneProject/UCI_Credit_Card.csv",header=TRUE)
+data_default <- read.csv("./UCI_Credit_Card.csv",header=TRUE)
 
 #do not show expenentials
 options(scipen=999)
