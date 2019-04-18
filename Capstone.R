@@ -10,11 +10,19 @@ library(scales)
 library(psych)
 #install.packages("GPArotation")
 library(GPArotation)
+#install.packages("gbm")
+library(gbm)
+#install.packages("pROC")
+library(pROC)
+#install.packages("xgboost")
+library(xgboost)
+
+
 
 #import data
 print("Import Data")
-data_default <- read.csv("D:/NYU/Curriculum/CapstoneProject/UCI_Credit_Card.csv",header=TRUE)
-
+data <- read.csv("D:/NYU/Curriculum/CapstoneProject/UCI_Credit_Card.csv",header=TRUE)
+data_default <- data
 #do not show expenentials
 options(scipen=999)
 
@@ -231,15 +239,16 @@ library('randomForest')
 n_train <- 0.8*nrow(data_default)
 set.seed(2212)
 t_rain <- sample(1:nrow(data_default),n_train)
-#data_train <- data_default[t_rain,]
+
+data_train <- data_default[,-1][t_rain,]
 #data_train
 
-oob_err <- matrix(nrow=5,ncol=24) # the out-of-bag error
-test_err <- matrix(nrow=5,ncol=24) # test_error, which is the mean_squared error
+oob_err <- matrix(nrow=5,ncol=23) # the out-of-bag error
+test_err <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
 # mtry is the variable number that each tree will split 
 n_tree <- c(10,50,100,150,200)
 # for tree number equals 10
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[1])
   oob_err[1,mtry] <- random_forest$err.rate[n_tree[1]]
@@ -248,7 +257,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 50  
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[2])
   oob_err[2,mtry] <- random_forest$err.rate[n_tree[2]]
@@ -257,7 +266,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 100
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[3])
   oob_err[3,mtry] <- random_forest$err.rate[n_tree[3]]
@@ -266,7 +275,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 150
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[4])
   oob_err[4,mtry] <- random_forest$err.rate[n_tree[4]]
@@ -275,13 +284,14 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 200
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[5])
   oob_err[5,mtry] <- random_forest$err.rate[n_tree[5]]
   pred <- predict(random_forest, data_default[-t_rain,])
   test_err[5,mtry] <- with(data_default[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
+
 
 
 test_err
@@ -296,20 +306,34 @@ legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","bl
 matplot(1:mtry, t(oob_err), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
 
-matplot(3:mtry, t(test_err[2:5,3:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
+matplot(3:mtry, t(test_err[2:5,3:23]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
 
-matplot(3:mtry, t(oob_err[2:5,3:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
+matplot(3:mtry, t(oob_err[2:5,3:23]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
 
-which.min(test_err[4,])
-oob_err[4,9]
+table(apply(test_err,2,which.min))
+which.min(test_err)
+min(test_err)
+oob_err[4,3]
 which.min(oob_err[4,])
+
 # the test accuracy comes to converge to a level at the 150 trees
-# so we just choose the model of 100 trees and the mtry number of 9
-random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
-                              subset=t_rain,mtry=9,ntree=150)
-random_forest
+# so we just choose the model of 100 trees and the mtry number of 3
+# and we have a smaller oob error
+random_forest_150 <- randomForest(formula=default_flag ~ .,data=data_default,
+                              subset=t_rain,mtry=3,ntree=150)
+random_forest_150
+which.min(test_err[3,])
+min(test_err[3,])
+which.min(oob_err[3,])
+oob_err[3,3]
+# when tree number equals 100
+# choose the mtry equals 16
+random_forest_100 <- randomForest(formula=default_flag ~ .,data=data_default,
+                                  subset = t_rain,mtry=3,ntree=100)
+random_forest_100
+
 
 # try to adjust the age into age groups
 data_default$AGE.group<-cut(data_default$AGE,c(20,40,60,80))
@@ -322,12 +346,12 @@ n_train_2 <- 0.8*nrow(data_default_2)
 set.seed(2212)
 t_rain_2 <- sample(1:nrow(data_default_2),n_train_2)
 
-oob_err_2 <- matrix(nrow=5,ncol=24) # the out-of-bag error
-test_err_2 <- matrix(nrow=5,ncol=24) # test_error, which is the mean_squared error
+oob_err_2 <- matrix(nrow=5,ncol=23) # the out-of-bag error
+test_err_2 <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
 # mtry is the variable number that each tree will split 
 n_tree <- c(10,50,100,150,200)
 # for tree number equals 10
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[1])
   oob_err_2[1,mtry] <- random_forest$err.rate[n_tree[1]]
@@ -336,7 +360,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 50  
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[2])
   oob_err_2[2,mtry] <- random_forest$err.rate[n_tree[2]]
@@ -345,7 +369,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 100
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[3])
   oob_err_2[3,mtry] <- random_forest$err.rate[n_tree[3]]
@@ -354,7 +378,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 150
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[4])
   oob_err_2[4,mtry] <- random_forest$err.rate[n_tree[4]]
@@ -363,7 +387,7 @@ for (mtry in 1:24){
 }
 
 # for tree number equals 200
-for (mtry in 1:24){
+for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[5])
   oob_err_2[5,mtry] <- random_forest$err.rate[n_tree[5]]
@@ -372,8 +396,83 @@ for (mtry in 1:24){
 }
 
 
-test_err_2
-oob_err_2
+min(test_err_2)
+min(oob_err_2)
+matplot(1:mtry, t(test_err_2), pch =23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
+legend("topright",legend=n_tree,pch = 23,col = c("red","orange","green","blue","black") )
+
+matplot(1:mtry, t(oob_err_2), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
+legend("topright",legend=n_tree,pch = 23,col = c("red","orange","green","blue","black") )
+
+matplot(3:mtry, t(test_err_2[2:5,3:23]), pch = 23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
+legend("topright",legend=n_tree[2:5],pch = 23,col = c("orange","green","blue","black") )
+
+matplot(3:mtry, t(oob_err_2[2:5,3:23]), pch = 23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
+legend("topright",legend=n_tree[2:5],pch = 23,col = c("orange","green","blue","black") )
+
+matplot(1:mtry,cbind(apply(test_err,2,min),apply(test_err_2,2,min)),pch = 23,col = c('red','green'),type = 'b',ylab = "Test Error")
+legend("topright",legend=c("Original","Age Group"),pch = 23,col = c('red','green') )
+
+sum(test_err<test_err_2)/(23*5)
 
 
 # gradient boosting machine model
+
+data_gbm <- data_default
+data_gbm$default_flag<-as.numeric(data_gbm$default_flag)
+data_gbm$default_flag<-data_gbm$default_flag-1
+data_gbm$default_flag
+data_train_gbm <- data_gbm[,-1][t_rain,]
+data_test_gbm <- data_gbm[,-1][-t_rain,]
+
+
+gbm_model <- gbm(default_flag ~ .,
+                 data = data_train_gbm,
+                 n.trees = 10000,
+                 distribution = "bernoulli",
+                 interaction.depth = 3,
+                 shrinkage = 0.01,
+                 bag.fraction = 0.5,
+                 train.fraction = 0.8)
+
+
+summary(gbm_model)
+
+best_iter <- gbm.perf(gbm_model, method = "test")
+best_iter
+# the best ntree is 2498
+gbm_improve <-  summary(gbm_model, n.trees = best_iter)
+
+gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
+
+auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
+print(auc_gbm)
+#Area under the curve: 0.7979
+
+# xgboost
+
+data_xgb <- data
+colnames(data_xgb)[25] <- "default_flag"
+data_train_xgb <- data_xgb[,-1][t_rain,]
+data_test_xgb <- data_xgb[,-1][-t_rain,]
+
+data_train_xgb <- xgb.DMatrix(as.matrix(data_xgb[,-1][t_rain,]), label = data_train_xgb$default_flag)
+data_test_xgb <- xgb.DMatrix(as.matrix(data_xgb[,-1][-t_rain,]), label = data_test_xgb$default_flag)
+
+
+xgb_model <- xgb.train(data = data_train_xgb,
+                             params = list(objective = "binary:logistic"
+                                             , eta = 0.1
+                                             , max.depth = 3
+                                             , min_child_weight = 100
+                                             , subsample = 1
+                                             , colsample_bytree = 1
+                                             , nthread = 3
+                                             , eval_metric = "auc"
+                             ),
+                             watchlist = list(test = data_test_xgb),
+                             nrounds = 500,
+                             early_stopping_rounds = 40,
+                             print_every_n = 20
+)
+
