@@ -20,8 +20,11 @@ library(gbm)
 library(pROC)
 #install.packages("xgboost")
 library(xgboost)
-
-
+#install.packages("foreach")
+library(foreach)
+library(parallel)
+#install.packages("doParallel")
+library(doParallel)
 
 #import data
 print("Import Data")
@@ -238,64 +241,73 @@ fa.diagram(fa_model_quartimax,simple = FALSE)
 # seperating the training and testing samples,we want to 
 # use 80% of the data to train the model
 
-data_default <- data_default[,-26]
-n_train <- 0.8*nrow(data_default)
+data_rf <- data_default[,-26]
+n_train <- 0.8*nrow(data_rf)
 set.seed(1121)
-t_rain <- sample(1:nrow(data_default),n_train)
+t_rain <- sample(1:nrow(data_rf),n_train)
 
-data_train <- data_default[,-1][t_rain,]
-#data_train
+data_train_rf <- data_rf[,-1][t_rain,]
+dim(data_train_rf)
 
 oob_err <- matrix(nrow=5,ncol=23) # the out-of-bag error
 test_err <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
 # mtry is the variable number that each tree will split 
+
+
 n_tree <- c(10,50,100,150,200)
 # for tree number equals 10
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[1])
   oob_err[1,mtry] <- random_forest$err.rate[n_tree[1]]
-  pred <- predict(random_forest, data_default[-t_rain,])
-  test_err[1,mtry] <- with(data_default[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf[-t_rain,])
+  test_err[1,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 50  
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[2])
   oob_err[2,mtry] <- random_forest$err.rate[n_tree[2]]
-  pred <- predict(random_forest, data_default[-t_rain,])
-  test_err[2,mtry] <- with(data_default[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf[-t_rain,])
+  test_err[2,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
+oob_err
 
 # for tree number equals 100
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[3])
   oob_err[3,mtry] <- random_forest$err.rate[n_tree[3]]
-  pred <- predict(random_forest, data_default[-t_rain,])
-  test_err[3,mtry] <- with(data_default[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf[-t_rain,])
+  test_err[3,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 150
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[4])
   oob_err[4,mtry] <- random_forest$err.rate[n_tree[4]]
-  pred <- predict(random_forest, data_default[-t_rain,])
-  test_err[4,mtry] <- with(data_default[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf[-t_rain,])
+  test_err[4,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 200
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[5])
   oob_err[5,mtry] <- random_forest$err.rate[n_tree[5]]
-  pred <- predict(random_forest, data_default[-t_rain,])
-  test_err[5,mtry] <- with(data_default[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf[-t_rain,])
+  test_err[5,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
-
+write.csv(oob_err,file = "oob_err.csv")
+write.csv(test_err,file = "test_err.csv")
 
 test_err
 oob_err
@@ -315,39 +327,47 @@ legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","bla
 matplot(3:mtry, t(oob_err[2:5,3:23]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
 
+
+
+
 table(apply(test_err,2,which.min))
 which.min(test_err)
 min(test_err)
-oob_err[4,3]
-which.min(oob_err[4,])
+oob_err[5,10]
+which.min(oob_err[5,])
 
 # the test accuracy comes to converge to a level at the 150 trees
-# so we just choose the model of 100 trees and the mtry number of 3
-# and we have a smaller oob error
-random_forest_150 <- randomForest(formula=default_flag ~ .,data=data_default,
-                              subset=t_rain,mtry=3,ntree=150)
-random_forest_150
-which.min(test_err[3,])
-min(test_err[3,])
-which.min(oob_err[3,])
-oob_err[3,3]
-# when tree number equals 100
-# choose the mtry equals 16
-random_forest_100 <- randomForest(formula=default_flag ~ .,data=data_default,
-                                  subset = t_rain,mtry=3,ntree=100)
-random_forest_100
+# and the oob error of 200 trees and 150 trees has little diffrence
+# so we just stop at 200 trees and choose the optimal mtry to predict
 
+# # so we just choose the model of 100 trees and the mtry number of 3
+# # and we have a smaller oob error
+# random_forest_150 <- randomForest(formula=default_flag ~ .,data=data_default,
+#                               subset=t_rain,mtry=3,ntree=150)
+# random_forest_150
+# which.min(test_err[3,])
+# min(test_err[3,])
+# which.min(oob_err[3,])
+# oob_err[3,3]
+# # when tree number equals 100
+# # choose the mtry equals 16
+# random_forest_100 <- randomForest(formula=default_flag ~ .,data=data_default,
+#                                   subset = t_rain,mtry=3,ntree=100)
+# random_forest_100
+
+random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+                              subset=t_rain,mtry=mtry,ntree=n_tree[5])
 
 # try to adjust the age into age groups
-data_default$AGE.group<-cut(data_default$AGE,c(20,40,60,80))
-data_default$AGE.group
-data_default_2 <- data_default[,-6]
-head(data_default_2)
+data_rf$AGE.group<-cut(data_rf$AGE,c(20,40,60,80))
+data_rf$AGE.group
+data_rf_2 <- data_rf[,-6]
+head(data_rf_2)
 
 
-n_train_2 <- 0.8*nrow(data_default_2)
-set.seed(2212)
-t_rain_2 <- sample(1:nrow(data_default_2),n_train_2)
+n_train_2 <- 0.8*nrow(data_rf_2)
+set.seed(1121)
+t_rain_2 <- sample(1:nrow(data_rf_2),n_train_2)
 
 oob_err_2 <- matrix(nrow=5,ncol=23) # the out-of-bag error
 test_err_2 <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
@@ -355,52 +375,61 @@ test_err_2 <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared err
 n_tree <- c(10,50,100,150,200)
 # for tree number equals 10
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[1])
   oob_err_2[1,mtry] <- random_forest$err.rate[n_tree[1]]
-  pred <- predict(random_forest, data_default_2[-t_rain_2,])
-  test_err_2[1,mtry] <- with(data_default_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+  test_err_2[1,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 50  
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[2])
   oob_err_2[2,mtry] <- random_forest$err.rate[n_tree[2]]
-  pred <- predict(random_forest, data_default_2[-t_rain_2,])
-  test_err_2[2,mtry] <- with(data_default_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+  test_err_2[2,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 100
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[3])
   oob_err_2[3,mtry] <- random_forest$err.rate[n_tree[3]]
-  pred <- predict(random_forest, data_default_2[-t_rain_2,])
-  test_err_2[3,mtry] <- with(data_default_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+  test_err_2[3,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 150
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[4])
   oob_err_2[4,mtry] <- random_forest$err.rate[n_tree[4]]
-  pred <- predict(random_forest, data_default_2[-t_rain_2,])
-  test_err_2[4,mtry] <- with(data_default_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+  test_err_2[4,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 # for tree number equals 200
 for (mtry in 1:23){
-  random_forest <- randomForest(formula=default_flag ~ .,data=data_default_2,
+  set.seed(1121)
+  random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[5])
   oob_err_2[5,mtry] <- random_forest$err.rate[n_tree[5]]
-  pred <- predict(random_forest, data_default_2[-t_rain_2,])
-  test_err_2[5,mtry] <- with(data_default_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+  test_err_2[5,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
 
 
+write.csv(oob_err_2,file = "oob_err_2.csv")
+write.csv(test_err_2,file = "test_err_2.csv")
+
 min(test_err_2)
 min(oob_err_2)
+
 matplot(1:mtry, t(test_err_2), pch =23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
 legend("topright",legend=n_tree,pch = 23,col = c("red","orange","green","blue","black") )
 
