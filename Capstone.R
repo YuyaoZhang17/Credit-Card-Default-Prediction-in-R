@@ -333,8 +333,9 @@ legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","bla
 table(apply(test_err,2,which.min))
 which.min(test_err)
 min(test_err)
-oob_err[5,10]
+oob_err[5,15]
 which.min(oob_err[5,])
+which.min(test_err[5,])
 
 # the test accuracy comes to converge to a level at the 150 trees
 # and the oob error of 200 trees and 150 trees has little diffrence
@@ -354,13 +355,15 @@ which.min(oob_err[5,])
 # random_forest_100 <- randomForest(formula=default_flag ~ .,data=data_default,
 #                                   subset = t_rain,mtry=3,ntree=100)
 # random_forest_100
-
+set.seed(1121)
 random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
-                              subset=t_rain,mtry=mtry,ntree=n_tree[5])
+                              subset=-t_rain,mtry=15,ntree=200)
+
+random_forest
 
 # try to adjust the age into age groups
 data_rf$AGE.group<-cut(data_rf$AGE,c(20,40,60,80))
-data_rf$AGE.group
+#data_rf$AGE.group
 data_rf_2 <- data_rf[,-6]
 head(data_rf_2)
 
@@ -451,10 +454,10 @@ sum(test_err<test_err_2)/(23*5)
 # gradient boosting machine model
 # first try with the original data
 
-data_gbm <- data_default
+data_gbm <- data_default[,-26]
 data_gbm$default_flag<-as.numeric(data_gbm$default_flag)
 data_gbm$default_flag<-data_gbm$default_flag-1
-data_gbm$default_flag
+#data_gbm$default_flag
 data_train_gbm <- data_gbm[,-1][t_rain,]
 data_test_gbm <- data_gbm[,-1][-t_rain,]
 
@@ -484,7 +487,7 @@ which.max(iter_auc[2,])
 set.seed(1121)
 gbm_model <- gbm(default_flag ~ .,
                  data = data_train_gbm,
-                 n.trees = 5000,
+                 n.trees = 1000,
                  distribution = "bernoulli",
                  interaction.depth = 4,
                  shrinkage = 0.01,
@@ -503,7 +506,7 @@ gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
 
 auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
 print(auc_gbm)
-
+roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
 #Area under the curve: 0.7984
 
 
