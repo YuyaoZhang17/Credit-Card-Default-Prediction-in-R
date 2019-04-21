@@ -242,12 +242,14 @@ fa.diagram(fa_model_quartimax,simple = FALSE)
 # use 80% of the data to train the model
 
 data_rf <- data_default[,-26]
+data_rf <- data_rf[,colnames(data_rf)!="ID"]
 n_train <- 0.8*nrow(data_rf)
 set.seed(1121)
 t_rain <- sample(1:nrow(data_rf),n_train)
 
-data_train_rf <- data_rf[,-1][t_rain,]
-dim(data_train_rf)
+data_train_rf <- data_rf[t_rain,]
+
+
 
 oob_err <- matrix(nrow=5,ncol=23) # the out-of-bag error
 test_err <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
@@ -362,11 +364,13 @@ random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
 random_forest
 
 # try to adjust the age into age groups
-data_rf$AGE.group<-cut(data_rf$AGE,c(20,40,60,80))
+data_rf_2 <- data_rf
+data_rf_2$AGE.group<-cut(data_rf_2$AGE,c(20,40,60,80))
 #data_rf$AGE.group
-data_rf_2 <- data_rf[,-6]
-head(data_rf_2)
+data_rf_2 <- data_rf_2[,colnames(data_rf_2)!="AGE"]
+data_rf_2 <- data_rf_2[,colnames(data_rf_2)!="ID"]
 
+head(data_rf_2)
 
 n_train_2 <- 0.8*nrow(data_rf_2)
 set.seed(1121)
