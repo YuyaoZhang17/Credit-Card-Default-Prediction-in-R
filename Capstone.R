@@ -19,12 +19,9 @@ library(gbm)
 #install.packages("pROC")
 library(pROC)
 #install.packages("xgboost")
-library(xgboost)
-#install.packages("foreach")
-library(foreach)
-library(parallel)
-#install.packages("doParallel")
-library(doParallel)
+#library(xgboost)
+
+
 
 #import data
 print("Import Data")
@@ -276,7 +273,7 @@ for (mtry in 1:23){
   pred <- predict(random_forest, data_rf[-t_rain,])
   test_err[2,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
 }
-oob_err
+
 
 # for tree number equals 100
 for (mtry in 1:23){
@@ -316,8 +313,11 @@ oob_err
 apply(test_err,1,min)
 apply(oob_err,1,min)
 
+oob_err <- read.csv("D:/NYU/Curriculum/CapstoneProject/oob_err.csv")
+test_err <- read.csv("D:/NYU/Curriculum/CapstoneProject/test_err.csv")
 
-matplot(1:mtry, t(test_err), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
+
+matplot(1:mtry, t(test_err[,-1]), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
 legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
 
 matplot(1:mtry, t(oob_err), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
@@ -335,13 +335,13 @@ legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","bla
 table(apply(test_err,2,which.min))
 which.min(test_err)
 min(test_err)
-oob_err[5,15]
+oob_err[5,4]
 which.min(oob_err[5,])
 which.min(test_err[5,])
 
 # the test accuracy comes to converge to a level at the 150 trees
 # and the oob error of 200 trees and 150 trees has little diffrence
-# so we just stop at 200 trees and choose the optimal mtry to predict
+# so we just stop at 200 trees and choose the optimal mtry 4 to predict
 
 # # so we just choose the model of 100 trees and the mtry number of 3
 # # and we have a smaller oob error
@@ -359,9 +359,8 @@ which.min(test_err[5,])
 # random_forest_100
 set.seed(1121)
 random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
-                              subset=-t_rain,mtry=15,ntree=200)
-
-random_forest
+                              subset=t_rain,mtry=4,ntree=200)
+random_forest$confusion
 
 # try to adjust the age into age groups
 data_rf_2 <- data_rf
@@ -434,8 +433,9 @@ for (mtry in 1:23){
 write.csv(oob_err_2,file = "oob_err_2.csv")
 write.csv(test_err_2,file = "test_err_2.csv")
 
-min(test_err_2)
+which.min(test_err_2)
 min(oob_err_2)
+min(test_err_2)<min(test_err)
 
 matplot(1:mtry, t(test_err_2), pch =23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
 legend("topright",legend=n_tree,pch = 23,col = c("red","orange","green","blue","black") )
@@ -454,16 +454,31 @@ legend("topright",legend=c("Original","Age Group"),pch = 23,col = c('red','green
 
 sum(test_err<test_err_2)/(23*5)
 
+# do a bootstrap of random forest
+boot_strap_rf <- sapply(1:10, function(x) {
+  train_set <- sample(1:30000,24000)
+  train <- data_rf[train_set,]
+  test <- data_rf[-train_set,]
+  boot_sample <- randomForest(formula=default_flag ~ .,data=data_rf,
+                                              subset=train_set,mtry=4,ntree=200)
+  rf_test <-  predict(random_forest, data_rf[-train_set,])
+  with(data_rf[-train_set,], cumsum( default_flag!=rf_test)[length(rf_test)]/(length(rf_test)))
+})
+
+boot_strap_rf <- t(boot_strap_rf)
+mean(boot_strap_rf)
+
+# the mean of test error of random forest is 0.1484833
 
 # gradient boosting machine model
 # first try with the original data
 
 data_gbm <- data_default[,-26]
-data_gbm$default_flag<-as.numeric(data_gbm$default_flag)
-data_gbm$default_flag<-data_gbm$default_flag-1
+data_gbm$default_flag <-ifelse(data_gbm$default_flag=="Yes",1,0)
+data_gbm <- data_gbm[,colnames(data_gbm)!="ID"]
 #data_gbm$default_flag
-data_train_gbm <- data_gbm[,-1][t_rain,]
-data_test_gbm <- data_gbm[,-1][-t_rain,]
+data_train_gbm <- data_gbm[t_rain,]
+data_test_gbm <- data_gbm[-t_rain,]
 
 
 iter_auc <- matrix(nrow = 2,ncol = 10)
@@ -476,8 +491,9 @@ for(dep_th in 1:10){
       interaction.depth = dep_th,
       shrinkage = 0.01,
       bag.fraction = 0.5,
-      train.fraction = 0.8)
-  best_iter <- gbm.perf(gbm_model, method = "test")
+      train.fraction = 0.8,
+      cv.folds = 3)
+  best_iter <- gbm.perf(gbm_model, method = "cv")
   iter_auc[1,dep_th] <- best_iter
   #gbm_improve <-  summary(gbm_model, n.trees = best_iter)
   gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
@@ -486,41 +502,47 @@ for(dep_th in 1:10){
 }
 
 iter_auc
+write.csv(iter_auc,file = "iter_auc.csv")
 which.max(iter_auc[2,])
-# we choose the interaction.depth of 4
+# we choose the interaction.depth of 9
 set.seed(1121)
 gbm_model <- gbm(default_flag ~ .,
                  data = data_train_gbm,
-                 n.trees = 1000,
+                 n.trees = 5000,
                  distribution = "bernoulli",
-                 interaction.depth = 4,
+                 interaction.depth = 9,
                  shrinkage = 0.01,
                  bag.fraction = 0.5,
-                 train.fraction = 0.8)
+                 train.fraction = 0.8,
+                 cv.folds = 3)
 
 
 summary(gbm_model)
 
-best_iter <- gbm.perf(gbm_model, method = "test")
+best_iter <- gbm.perf(gbm_model, method = "cv")
 best_iter
-# the best ntree is 2019
+# the best ntree is 847
 gbm_improve <-  summary(gbm_model, n.trees = best_iter)
 
 gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
 
 auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
 print(auc_gbm)
-roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
-#Area under the curve: 0.7984
+# to see the threshold that used to check whether a outcome is default or not
+coords(auc_gbm,"best")
+predict_class <- ifelse(gbm_test > coords(auc_gbm,"best")["threshold"],1,0)
+
+#Area under the curve: 0.7814
 
 
 # now add the age group into the model
-
-data_gbm$AGE.group<-cut(data_gbm$AGE,c(20,40,60,80))
+data_gbm_2 <- data_gbm
+data_gbm_2$AGE.group<-cut(data_gbm_2$AGE,c(20,40,60,80))
 #data_gbm$AGE.group
-data_gbm_2 <- data_gbm[,-6]
-data_train_gbm_2 <- data_gbm_2[,-1][t_rain,]
-data_test_gbm_2 <- data_gbm_2[,-1][-t_rain,]
+data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="AGE"]
+data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="ID"]
+data_train_gbm_2 <- data_gbm_2[t_rain,]
+data_test_gbm_2 <- data_gbm_2[-t_rain,]
 
 
 iter_auc_2 <- matrix(nrow = 2,ncol = 10)
@@ -533,8 +555,9 @@ for(dep_th in 1:10){
                    interaction.depth = dep_th,
                    shrinkage = 0.01,
                    bag.fraction = 0.5,
-                   train.fraction = 0.8)
-  best_iter <- gbm.perf(gbm_model, method = "test")
+                   train.fraction = 0.8,
+                   cv.folds = 3)
+  best_iter <- gbm.perf(gbm_model, method = "cv")
   iter_auc_2[1,dep_th] <- best_iter
   #gbm_improve <-  summary(gbm_model, n.trees = best_iter)
   gbm_test <-  predict(gbm_model, newdata = data_test_gbm_2, n.trees = best_iter)
@@ -542,26 +565,29 @@ for(dep_th in 1:10){
   iter_auc_2[2,dep_th] <- auc_gbm$auc
 }
 iter_auc_2
-which.max(iter_auc_2[2,])
+write.csv(iter_auc_2,file = "iter_auc_2.csv")
+which.max(iter_auc_2[2,-1])
 
 matplot(1:10,cbind(t(iter_auc)[,2],t(iter_auc_2)[,2]),pch = 23,col = c('red','green'),type = 'b',ylab = "AUC")
 legend("bottomright",legend=c("Original","Age Group"),pch = 23,col = c('red','green') )
 
-# we can see that the performance of original group is better than age group
+# we can see that the performance of age group is a little bit better than original group
+
 set.seed(1121)
 gbm_model_2 <- gbm(default_flag ~ .,
                  data = data_train_gbm_2,
-                 n.trees = 10000,
+                 n.trees = 5000,
                  distribution = "bernoulli",
-                 interaction.depth = 4,
-                 shrinkage = 0.01,
+                 interaction.depth = 5,
+                 shrinkage = 0.1,
                  bag.fraction = 0.5,
-                 train.fraction = 0.8)
+                 train.fraction = 0.8,
+                 cv.folds = 3)
 
 
 summary(gbm_model_2)
 
-best_iter_2 <- gbm.perf(gbm_model_2, method = "test")
+best_iter_2 <- gbm.perf(gbm_model_2, method = "cv")
 best_iter_2
 
 gbm_improve_2 <-  summary(gbm_model_2, n.trees = best_iter_2)
@@ -571,65 +597,129 @@ gbm_test_2 <-  predict(gbm_model_2, newdata = data_test_gbm_2, n.trees = best_it
 auc_gbm_2 <-  roc(data_test_gbm_2$default_flag, gbm_test_2, plot = TRUE, col = "red")
 print(auc_gbm_2)
 
-# Arwa under the curve : 0.7979 , which is less than original one
+#Call:
+# roc.default(response = data_test_gbm_2$default_flag, predictor = gbm_test_2,     plot = TRUE, col = "red")
+# 
+# Data: gbm_test_2 in 4666 controls (data_test_gbm_2$default_flag 0) < 1334 cases (data_test_gbm_2$default_flag 1).
+# Area under the curve: 0.782
 
-# xgboost
+# next we use bootstrap to validate the tested GBM model
 
-data_xgb <- data
-colnames(data_xgb)[25] <- "default_flag"
-train_xgb <- data_xgb[,-1][t_rain,]
-test_xgb <- data_xgb[,-1][-t_rain,]
+# boot_strap_gbm <- sapply(1:10, function(x) {
+#   train_set <- sample(1:30000,24000)
+#   data_gbm_2 <- data_gbm
+#   data_gbm_2$AGE.group<-cut(data_gbm_2$AGE,c(20,40,60,80))
+#   data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="AGE"]
+#   data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="ID"]
+#   train <- data_gbm_2[train_set,]
+#   test <- data_gbm_2[-train_set,]
+#   boot_sample <-gbm(default_flag ~ .,
+#                      data = train,
+#                      n.trees = 1276,
+#                      distribution = "bernoulli",
+#                      interaction.depth = 5,
+#                      shrinkage = 0.01,
+#                      bag.fraction = 0.5,
+#                      train.fraction = 0.8,
+#                      cv.folds = 3)
+#   gbm_test <-  predict(boot_sample, newdata = test, n.trees = 1276)
+#   auc <-  roc(test$default_flag, gbm_test, plot = FALSE, col = "red")
+#   auc$auc
+# })
+# boot_strap_gbm <- t(boot_strap_gbm)
+# quantile(boot_strap_gbm)
+# mean(boot_strap_gbm)
+# the mean of bootstrap of gbm is 0.7845102
+
+# do a bootstrap to calculate test error
+boot_strap_gbm <- sapply(1:10, function(x) {
+  train_set <- sample(1:30000,24000)
+  data_gbm_2 <- data_gbm
+  data_gbm_2$AGE.group<-cut(data_gbm_2$AGE,c(20,40,60,80))
+  data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="AGE"]
+  data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="ID"]
+  train <- data_gbm_2[train_set,]
+  test <- data_gbm_2[-train_set,]
+  boot_sample <-gbm(default_flag ~ .,
+                    data = train,
+                    n.trees = 1276,
+                    distribution = "bernoulli",
+                    interaction.depth = 5,
+                    shrinkage = 0.01,
+                    bag.fraction = 0.5,
+                    train.fraction = 0.8,
+                    cv.folds = 3)
+  gbm_test <-  predict(boot_sample, newdata = test, n.trees = 1276)
+  auc <-  roc(test$default_flag, gbm_test, plot = FALSE, col = "red")
+  predict_class <- ifelse(gbm_test > coords(auc,"best")["threshold"],1,0)
+  test_err <- with(data_gbm[-train_set,], cumsum( default_flag!=predict_class)[length(predict_class)]/(length(predict_class)))
+  c(test_err=test_err,auc=auc$auc)
+  
+  })
+boot_strap_gbm <- t(boot_strap_gbm)
+apply(boot_strap_gbm,2,quantile)
+apply(boot_strap_gbm,2,mean)
+# the mean of test error is 0.233
 
 
-data_train_xgb <- xgb.DMatrix(as.matrix(train_xgb[,-24]), label = train_xgb$default_flag)
-data_test_xgb <- xgb.DMatrix(as.matrix(test_xgb[,-24]), label = test_xgb$default_flag)
-
-ntree_auc <- matrix(nrow = 2,ncol = 10)
-
-for(max_depth in 1:10){
-  set.seed(1121)
-  xgb_model <- xgb.train(data = data_train_xgb,
-                         params = list(objective = "binary:logistic",
-                                       eta = 0.1,
-                                       max.depth = max_depth,
-                                       subsample = 0.5,
-                                       min_child_weight=50,
-                                       colsample_bytree = 1,
-                                       nthread = 3,
-                                       eval_metric = "auc"
-                         ),
-                         watchlist = list(test = data_test_xgb),
-                         nrounds = 500,
-                         early_stopping_rounds = 40,
-                         print_every_n = 100
-  )
-  ntree_auc[1,max_depth] <- xgb_model$best_ntreelimit
-  ntree_auc[2,max_depth] <- xgb_model$best_score
-}
-plot(1:10,ntree_auc[2,],type = "l",col="blue")
-which.max(ntree_auc[2,])
-# choose the max_depth of 7
-
-set.seed(1121)
-xgb_model <- xgb.train(data = data_train_xgb,
-                             params = list(objective = "binary:logistic",
-                                           eta = 0.1,
-                                           max.depth = 7,
-                                           subsample = 0.5,
-                                           min_child_weight=50,
-                                           colsample_bytree = 1,
-                                           nthread = 3,
-                                           eval_metric = "auc"
-                             ),
-                             watchlist = list(test = data_test_xgb),
-                             nrounds = 500,
-                             early_stopping_rounds = 40,
-                             print_every_n = 100
-)
-
-print(xgb_model$best_score)
-
-xgb_test <- predict(xgb_model,newdata = as.matrix(test_xgb[,-24]),ntreelimit=xgb_model$best_ntreelimit)
-auc_xgb <- roc(test_xgb$default_flag, xgb_test, plot = TRUE, col = "blue")
-print(auc_xgb)
-# Area under the curve: 0.7853
+# 
+# # xgboost
+# 
+# data_xgb <- data
+# colnames(data_xgb)[25] <- "default_flag"
+# train_xgb <- data_xgb[,-1][t_rain,]
+# test_xgb <- data_xgb[,-1][-t_rain,]
+# 
+# 
+# data_train_xgb <- xgb.DMatrix(as.matrix(train_xgb[,-24]), label = train_xgb$default_flag)
+# data_test_xgb <- xgb.DMatrix(as.matrix(test_xgb[,-24]), label = test_xgb$default_flag)
+# 
+# ntree_auc <- matrix(nrow = 2,ncol = 10)
+# 
+# for(max_depth in 1:10){
+#   set.seed(1121)
+#   xgb_model <- xgb.train(data = data_train_xgb,
+#                          params = list(objective = "binary:logistic",
+#                                        eta = 0.1,
+#                                        max.depth = max_depth,
+#                                        subsample = 0.5,
+#                                        min_child_weight=50,
+#                                        colsample_bytree = 1,
+#                                        nthread = 3,
+#                                        eval_metric = "auc"
+#                          ),
+#                          watchlist = list(test = data_test_xgb),
+#                          nrounds = 500,
+#                          early_stopping_rounds = 40,
+#                          print_every_n = 100
+#   )
+#   ntree_auc[1,max_depth] <- xgb_model$best_ntreelimit
+#   ntree_auc[2,max_depth] <- xgb_model$best_score
+# }
+# plot(1:10,ntree_auc[2,],type = "l",col="blue")
+# which.max(ntree_auc[2,])
+# # choose the max_depth of 7
+# 
+# set.seed(1121)
+# xgb_model <- xgb.train(data = data_train_xgb,
+#                              params = list(objective = "binary:logistic",
+#                                            eta = 0.1,
+#                                            max.depth = 7,
+#                                            subsample = 0.5,
+#                                            min_child_weight=50,
+#                                            colsample_bytree = 1,
+#                                            nthread = 3,
+#                                            eval_metric = "auc"
+#                              ),
+#                              watchlist = list(test = data_test_xgb),
+#                              nrounds = 500,
+#                              early_stopping_rounds = 40,
+#                              print_every_n = 100
+# )
+# 
+# print(xgb_model$best_score)
+# 
+# xgb_test <- predict(xgb_model,newdata = as.matrix(test_xgb[,-24]),ntreelimit=xgb_model$best_ntreelimit)
+# auc_xgb <- roc(test_xgb$default_flag, xgb_test, plot = TRUE, col = "blue")
+# print(auc_xgb)
+# # Area under the curve: 0.7853
