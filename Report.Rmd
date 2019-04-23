@@ -1,0 +1,941 @@
+---
+title: "Project Report"
+author: "Yuyao Zhang, Mengjie Ai"
+affiliation: "NYU Tandon School of Engineering"
+date: '`r format(Sys.Date(), "%m/%d/%Y")`'
+email: yz4026@nyu.edu, ma4895@nyu.edu
+css: slides.css
+##output:
+##  pdf_document: default
+##  html_document: default
+##    logo: image/tandon_stacked_color.png
+##    smaller: yes
+##    widescreen: yes
+##runtime: shiny
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+# This is an R setup chunk, containing default options applied to all other chunks
+library(knitr)
+
+# This sets the chunk default options
+opts_chunk$set(cache=TRUE, collapse=TRUE, error=FALSE, prompt=TRUE)
+# This sets the chunk display theme
+#knit_theme$set(knit_theme$get("acid"))
+# This sets some display options
+options(digits=3)
+options(width=80)
+#install.packages('funModeling')
+#install.packages('GGally')
+library(funModeling)
+#library(GGally)
+library(ggplot2)
+#install.packages('corrplot')
+library(corrplot)
+library(scales)
+#install.packages("psych")
+library(psych)
+#install.packages("GPArotation")
+library(GPArotation)
+#install.packages('randomForest')
+#install.packages('rfUtilities')
+library(rfUtilities)
+library(randomForest)
+#install.packages("gbm")
+library(gbm)
+#install.packages("pROC")
+library(pROC)
+#install.packages("xgboost")
+#library(xgboost)
+
+```
+
+## Literature Review 
+For this project we read several papers about this area and here are some summaries.
+
+
+## Packages that we used
+
+## Data Processing
+```{r, eval=TRUE, echo=FALSE, cache=FALSE}
+#import data
+print("Import Data")
+data <- read.csv("./UCI_Credit_Card.csv",header=TRUE)
+data_default <- data
+#do not show expenentials
+options(scipen=999)
+
+head(data_default)
+sum(is.na(data_default))
+
+dim(data_default)
+
+#summary(data_default)
+
+status <- df_status(data_default)
+
+# Converting target column to factor
+data_default$default.payment.next.month <- 
+  as.factor(data_default$default.payment.next.month)
+
+
+# For further analysis, we need features names to demonstrate themselves
+# So we need to convert some feature from numeric to factor to 
+# make them more descriptive
+
+# Convert Sex data 1,2 to Male and Female
+data_default$SEX <- as.factor(data_default$SEX)
+levels(data_default$SEX) <- c("Male","Female")
+
+# Convert Education level data
+data_default$EDUCATION <- as.factor(data_default$EDUCATION)
+levels(data_default$EDUCATION) <- c("Others",
+                                    "Graduate School",
+                                    "Unversity",
+                                    "High School",
+                                    "Others",
+                                    "Others",
+                                    "Others")
+#ai:can we make others and unknown into one level? 
+
+# Convert Marriage level data
+data_default$MARRIAGE <- as.factor(data_default$MARRIAGE)
+levels(data_default$MARRIAGE) <- c("Others","Married","Single","Others")
+
+# Convert Repayment Status columns to Factors
+data_default$PAY_0 <-as.factor(data_default$PAY_0)
+data_default$PAY_2 <- as.factor(data_default$PAY_2)
+data_default$PAY_3 <- as.factor(data_default$PAY_3)
+data_default$PAY_4 <- as.factor(data_default$PAY_4)
+data_default$PAY_5 <- as.factor(data_default$PAY_5)
+data_default$PAY_6 <- as.factor(data_default$PAY_6)
+
+# Convert default.payment.next.month to Factors 
+data_default$default.payment.next.month <- as.factor(data_default$default.payment.next.month)
+levels(data_default$default.payment.next.month) <- c("No" , "Yes")
+
+#default.payment.next.month is too long 
+colnames(data_default)[25] <- "default_flag"
+
+# Check the status of features
+status <- df_status(data_default)
+
+# Now begin the analysis of some typical features via plots
+# First begin with SEX and AGE because these are two most typical 
+# Physilogical features for human beings
+
+```
+
+
+In order to make the data more suitable for further analysis and machine learning, we made the following steps to engineer them:
+
+1. Converting default.payment.next.month to factor: No and Yes, change its column name into "default_flag";
+2. Convert Sex data 1,2 to Male and Female;
+3. Convert Education data into four levels: "Graduate School", "University", "High School" and "Others";
+4. Convert Marriage data into three levels: "Others", "Married" and "Single";
+5. Convert Repayment Status columns to Factors;
+6. Check the status of all features.
+
+
+
+
+
+ ![Status of Features](image/Status of Features.png)
+
+## Visualization and Analysis of Features
+First, we found the relationship between independent variable and the dependent variable.
+
+### *Sex and default_flag
+
+```{r, eval=TRUE, echo=FALSE, cache=FALSE}
+ggplot(aes(x=SEX,fill=default_flag), data=data_default)+ geom_bar()
+
+ggplot(data_default, aes(x=SEX, fill=default_flag)) + 
+  geom_bar(position="dodge") + 
+  stat_count(aes(label=paste0(sprintf("%1.1f", ..count../sum(..count..)*100),
+                              "%\n", ..count..), y=0.5*..count..), 
+             geom="text", colour="white", size=4, position=position_dodge(width=1)) 
+```
+
+We can see that although the percentage of male default in all instances is smaller than the female default, male default has a larger proportion in male population than female default in female population. So, in general, gender could have an impact on the default _flag, meaning male may have more chance to default given other conditions being equal. 
+
+### *Education and default_flag
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# 1
+ggplot(aes(x=EDUCATION,fill=default_flag), data=data_default)+ geom_bar()
+# 2
+ggplot(aes(x=default_flag,fill=default_flag),data=data_default) + 
+  geom_histogram(stat="count") +
+  facet_wrap(~EDUCATION)
+#3
+ggplot(aes(x=default_flag,fill=EDUCATION),data=data_default) + 
+  geom_bar() +
+  facet_wrap(~SEX)
+
+
+ggplot(aes(x=default_flag,fill=SEX),data=data_default) + 
+  geom_bar()+facet_wrap(~EDUCATION)
+```
+
+
+
+We can see that acrossing all the categories of the education, the default rate is relatively stable. Then, dividing the whole data with gender and default_flag into four different category, in each category, the distribution of education is similar. Last, different kind of education level, the rates of default in female and male do not vary a lot. In conclusion, education seems to have little effect on default.
+
+### *Marriage situation and default_flag
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+#1
+ggplot(aes(x=MARRIAGE,fill=default_flag), data=data_default)+ geom_bar()
+#2
+ggplot(aes(x=default_flag,fill=default_flag),data=data_default) + 
+  geom_histogram(stat="count") +
+  facet_wrap(~MARRIAGE)
+```
+
+From the two charts above, it looks like marriage could affect the default rate, with singles may results in higher probability in defaulting. 
+
+### *Age and default_flag
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+#1
+ggplot(aes(x=AGE,fill=default_flag), data=data_default)+ geom_bar()
+#2
+ggplot(aes(x=default_flag,y=AGE,fill=default_flag), data=data_default)+ geom_boxplot()
+#could have an impact, but not sure, so divide into age group
+data_default$AGE.group<-cut(data_default$AGE,c(20,40,60,80))
+#3
+ggplot(aes(x=default_flag,fill=default_flag),data=data_default) + 
+  geom_histogram(stat="count") +
+  facet_wrap(~AGE.group)
+#4
+ggplot(aes(x=default_flag,fill=AGE.group), data=data_default) + 
+  geom_bar() +facet_wrap(~SEX)
+```
+
+Age is a little more complicated than the other features since its value has wide range. When seeing the histogram and box plot, there isn't any obvious pattern shown. There could have an impact, but not sure. In order to look in to the data, we divide into age group: 20-40,40-60,60-80. 
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+data_default$AGE.group<-cut(data_default$AGE,c(20,40,60,80))
+#3
+ggplot(aes(x=default_flag,fill=default_flag),data=data_default) + 
+  geom_histogram(stat="count") +
+  facet_wrap(~AGE.group)
+#4
+ggplot(aes(x=default_flag,fill=AGE.group), data=data_default) + 
+  geom_bar() +facet_wrap(~SEX)
+```
+
+We can see that the 20-40 group accounts for a large propotion of the instances. And default rate in this group is slightly higher than 40-60 group, but diifference is minor. So, the younger the age, the more possible to default, but this pattern may still need further confirmation later in the project. 
+
+### *LIMIT_BAL and default_flag
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+#1
+ggplot(aes(x=default_flag,y=LIMIT_BAL,fill=default_flag), data=data_default)+ geom_boxplot()
+#2
+ggplot(aes(x=LIMIT_BAL,fill=default_flag), data=data_default)+ geom_histogram(bins = 20)
+#3
+def_rate <- function(x){
+  sum <- sum(data_default$LIMIT_BAL==x)
+  def <- sum(data_default$LIMIT_BAL==x & data_default$default_flag=="Yes")
+  return (def/sum)}
+y <- sapply(data_default$LIMIT_BAL,def_rate)
+ggplot(aes(x=LIMIT_BAL,y),data=data_default)+geom_line(color="red")+ ylab("Default_rate")
+
+```
+
+We can see that for the same limit balance amount, the rate of not defalut is higher than default. For limit balance amount in range(0,500,000) the default rate decreases as the amount increases. But when it comes to higher balance, the default rate seems to raise.In conclusion,limit balance amount has some impact.
+
+Next, find relationship among the independent variables
+The relationships between limit_bal and other variables could have some meaning
+
+### *Limit_bal, sex and education
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+#1
+ggplot(aes(x=SEX,y=LIMIT_BAL,fill=EDUCATION), data=data_default)+ geom_boxplot()
+ggplot(aes(x=SEX,y=LIMIT_BAL,fill=EDUCATION), data=data_default)+ geom_violin()
+#2
+ggplot(aes(x=EDUCATION,y=LIMIT_BAL,fill=SEX), data=data_default)+ geom_boxplot()
+ggplot(aes(x=EDUCATION,y=LIMIT_BAL,fill=SEX), data=data_default)+ geom_violin()
+
+```
+
+We can see that the limit amount for male and female are kind of similar in order with the catogories of education. And for the same education level, female has higher limit amount than male but the difference is kind of small. So that gender has no effects on balance limit while the education level is has a positive effect on this process.
+
+### *Limit_bal, age and education
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+ggplot(aes(x=AGE.group,y=LIMIT_BAL,fill=EDUCATION), data=data_default)+ geom_boxplot()
+ggplot(aes(x=AGE.group,y=LIMIT_BAL,fill=EDUCATION), data=data_default)+ geom_violin()
+```
+
+We can see that the higher the education level, the more limit balance people will get. And for age group of (60,80), the education level of others seems different from other age groups mostly because of the education system change in the past several decades. And education's positive effect on balance limits for clients is increasing by higher ages.
+
+### *Correlations Between Limit Balance, Bill Amounts & Payments
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+M <- cor(subset(data_default, select = c(LIMIT_BAL,BILL_AMT1,BILL_AMT2,BILL_AMT3,BILL_AMT4,BILL_AMT5,PAY_AMT1,PAY_AMT2,PAY_AMT3,PAY_AMT4,PAY_AMT5,PAY_AMT6)))
+corrplot(M, method="number")
+```
+
+Conclusion: When get the correlations between limit balances,bill amounts and payments amounts; it shows that there's a low correlation between the limit balances and payments and bill amounts. Howevet it can be seen that bill amounts has high correlation between each other as expected since the bills is a reflecting of the cumulative amounts.
+
+
+## PCA
+
+For this part, we meant to use PCA to reduce dimension for furthur step.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+data_pca <- data
+data_pca <- data_pca[,1:24]
+#df_status(data_pca)
+pca_default <- prcomp(data_pca,center = TRUE,scale. = TRUE)
+summary(pca_default)
+
+#str(pca_default)
+biplot(pca_default,var.axes=TRUE)
+
+screeplot(pca_default)
+screeplot(pca_default,type="lines")
+#predict(pca_default)
+
+#principal(data_pca[,-1],nfactors=5)
+```
+
+We can see that the result of PCA is not good because the 20th component has the cumulative variance of 99% of all 24 variables. We think this maybe not suitable for dimension reduction. Maybe it is because the scale step is not suitable for some features which only has 0-3 numbers.
+
+And we do further step about parallel analysis to see whether we can process a factor anlysis.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+fa.parallel(data_pca)
+
+fa(data_pca, nfactors=8,rotate="none", fm='ml')
+#Tucker Lewis Index of factoring reliability =  0.897
+#The first 7 factors explains 54% of the variance of data
+
+#Now rotate the factors
+fa_model_varimax <- fa(data_pca,nfactors = 8,rotate = 'varimax',fm='ml',scores = TRUE)
+#fa_model_varimax
+#fa_model_varimax$scores
+factor.plot(fa_model_varimax)
+fa.diagram(fa_model_varimax,simple = FALSE)
+
+fa_model_quartimax <- fa(data_pca,nfactors = 8,rotate = 'quartimax' ,fm='ml',scores = TRUE)
+#fa_model_quartimax
+#head(fa_model_quartimax$scores,3)
+factor.plot(fa_model_quartimax)
+fa.diagram(fa_model_quartimax,simple = FALSE)
+```
+
+From the result of factor anlysis, we found that the first 7 factors which recommended by parallel anlysis can inly explain 54% of the varaince of data, which is too low to reduce dimension.
+
+So we finally just drop the ID feature and remain all other features to do model training.
+
+## Models comparison
+
+### ANN
+
+### Random Forest
+
+This part we use the random forest method to do the training. Random forest is an ensemble learning method for classification and regression. It will construct a forest with many trees with each tree fits a certain amount of inputs. The outcome randomForest package to train the model. After training, predictions for unseen samples can be made by averaging the predictions from all the individual regression trees on samples. And the package we use is randomForest.
+
+First we need to split the data into train set and test set.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# seperating the training and testing samples,we want to 
+# use 80% of the data to train the model
+
+data_rf <- data_default[,-26]
+data_rf <- data_rf[,colnames(data_rf)!="ID"]
+n_train <- 0.8*nrow(data_rf)
+set.seed(1121)
+t_rain <- sample(1:nrow(data_rf),n_train)
+
+data_train_rf <- data_rf[t_rain,]
+
+```
+
+And then we try to find the most optimal random forest to fit the data set. To do this, we use loops to alter the mtry which is the variable number that each tree will split.
+
+```{r,eval=FALSE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+# This is the lowest part in the whole project and run this part could use up to 3 hours at #all. So for the aimplicity sake we just comment all the code and store the results in files to #come up with the report.
+
+
+# oob_err <- matrix(nrow=5,ncol=23) # the out-of-bag error
+# test_err <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
+# # mtry is the variable number that each tree will split 
+# 
+# 
+# n_tree <- c(10,50,100,150,200)
+# # for tree number equals 10
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                                 subset=t_rain,mtry=mtry,ntree=n_tree[1])
+#   oob_err[1,mtry] <- random_forest$err.rate[n_tree[1]]
+#   pred <- predict(random_forest, data_rf[-t_rain,])
+#   test_err[1,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 50  
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                                 subset=t_rain,mtry=mtry,ntree=n_tree[2])
+#   oob_err[2,mtry] <- random_forest$err.rate[n_tree[2]]
+#   pred <- predict(random_forest, data_rf[-t_rain,])
+#   test_err[2,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# 
+# # for tree number equals 100
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                                 subset=t_rain,mtry=mtry,ntree=n_tree[3])
+#   oob_err[3,mtry] <- random_forest$err.rate[n_tree[3]]
+#   pred <- predict(random_forest, data_rf[-t_rain,])
+#   test_err[3,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 150
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                                 subset=t_rain,mtry=mtry,ntree=n_tree[4])
+#   oob_err[4,mtry] <- random_forest$err.rate[n_tree[4]]
+#   pred <- predict(random_forest, data_rf[-t_rain,])
+#   test_err[4,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 200
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                                 subset=t_rain,mtry=mtry,ntree=n_tree[5])
+#   oob_err[5,mtry] <- random_forest$err.rate[n_tree[5]]
+#   pred <- predict(random_forest, data_rf[-t_rain,])
+#   test_err[5,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# write.csv(oob_err,file = "oob_err.csv")
+# write.csv(test_err,file = "test_err.csv")
+# 
+# test_err
+# oob_err
+# apply(test_err,1,min)
+# apply(oob_err,1,min)
+```
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+oob_err <- read.csv("./oob_err.csv")
+test_err <- read.csv("./test_err.csv")
+n_tree <- c(10,50,100,150,200)
+
+matplot(xlab = "mtry", t(test_err[,-1]), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
+legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
+
+matplot(xlab = "mtry", t(oob_err[,-1]), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
+legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
+
+matplot(xlab = "mtry", t(test_err[2:5,4:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
+legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
+
+matplot(xlab = "mtry", t(oob_err[2:5,4:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
+legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
+```
+
+The test accuracy comes to converge to a level at the 150 trees and the oob error of 200 trees and 150 trees has little diffrence,so we just stop at 200 trees and choose the optimal mtry 4 to predict.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+# set.seed(1121)
+# random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                               subset=t_rain,mtry=4,ntree=200)
+
+```
+
+In order to see whether the age group would influence the random forest, we now delete the column of age and replace it with age group, and then train the model.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# # This part does the same thing with the part above besides the data set is diffenrent.
+# 
+# data_rf_2 <- data_rf
+# data_rf_2$AGE.group<-cut(data_rf_2$AGE,c(20,40,60,80))
+# #data_rf$AGE.group
+# data_rf_2 <- data_rf_2[,colnames(data_rf_2)!="AGE"]
+# data_rf_2 <- data_rf_2[,colnames(data_rf_2)!="ID"]
+# 
+# n_train_2 <- 0.8*nrow(data_rf_2)
+# set.seed(1121)
+# t_rain_2 <- sample(1:nrow(data_rf_2),n_train_2)
+# 
+# oob_err_2 <- matrix(nrow=5,ncol=23) # the out-of-bag error
+# test_err_2 <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
+# # mtry is the variable number that each tree will split 
+# n_tree <- c(10,50,100,150,200)
+# # for tree number equals 10
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
+#                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[1])
+#   oob_err_2[1,mtry] <- random_forest$err.rate[n_tree[1]]
+#   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+#   test_err_2[1,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 50  
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
+#                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[2])
+#   oob_err_2[2,mtry] <- random_forest$err.rate[n_tree[2]]
+#   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+#   test_err_2[2,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 100
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
+#                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[3])
+#   oob_err_2[3,mtry] <- random_forest$err.rate[n_tree[3]]
+#   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+#   test_err_2[3,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 150
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
+#                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[4])
+#   oob_err_2[4,mtry] <- random_forest$err.rate[n_tree[4]]
+#   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+#   test_err_2[4,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+# }
+# 
+# # for tree number equals 200
+# for (mtry in 1:23){
+#   set.seed(1121)
+#   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
+#                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[5])
+#   oob_err_2[5,mtry] <- random_forest$err.rate[n_tree[5]]
+#   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
+#   test_err_2[5,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+#}
+
+```
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+test_err_2 <- read.csv("./test_err_2.csv")
+oob_err_2 <- read.csv("./oob_err_2.csv")
+n_tree <- c(10,50,100,150,200)
+
+matplot(xlab = "mtry", t(test_err_2[,-1]), pch =23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
+legend("topright",legend=n_tree,pch = 23,col = c("red","orange","green","blue","black") )
+
+matplot(xlab = "mtry", t(oob_err_2[,-1]), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
+legend("topright",legend=n_tree,pch = 23,col = c("red","orange","green","blue","black") )
+
+matplot(xlab = "mtry", t(test_err_2[2:5,4:24]), pch = 23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
+legend("topright",legend=n_tree[2:5],pch = 23,col = c("orange","green","blue","black") )
+
+matplot(xlab = "mtry", t(oob_err_2[2:5,4:24]), pch = 23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
+legend("topright",legend=n_tree[2:5],pch = 23,col = c("orange","green","blue","black") )
+
+matplot(xlab = "mtry",cbind(apply(test_err[,-1],2,min),apply(test_err_2[,-1],2,min)),pch = 23,col = c('red','green'),type = 'b',ylab = "Test Error")
+legend("topright",legend=c("Original","Age Group"),pch = 23,col = c('red','green') )
+
+#sum(test_err<test_err_2)/(23*5)
+
+
+```
+
+This is a comparison of the original data set and age group data set, we found that the original data set has a better performance than age group data set for that it has a smaller test error.
+
+So we chose the model we trained before with the original dataset to do a bootstrap and calculate its average test error.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# do a bootstrap of random forest
+# boot_strap_rf <- sapply(1:10, function(x) {
+#   train_set <- sample(1:30000,24000)
+#   train <- data_rf[train_set,]
+#   test <- data_rf[-train_set,]
+#   boot_sample <- randomForest(formula=default_flag ~ .,data=data_rf,
+#                                               subset=train_set,mtry=4,ntree=200)
+#   rf_test <-  predict(random_forest, data_rf[-train_set,])
+#   with(data_rf[-train_set,], cumsum( default_flag!=rf_test)[length(rf_test)]/(length(rf_test)))
+# })
+# 
+# boot_strap_rf <- t(boot_strap_rf)
+# mean(boot_strap_rf)
+
+# the mean of test error of random forest is 0.1484833
+
+```
+
+We can get the result that the mean of test error from bootstrap of random forest is 0.1484833.
+
+### Gradient Boosting Machine
+
+Next we use the GBM model, which could be regarded as the improvement of random forest method because the GBM trains the residual of the prior model and adds all the functions it trains to be the final function of training. It captures the features that random forest may not capture so we expect it to be a better trial. We use the package gbm to construct model and package Proc to plot the ROC.
+
+As usual, we first use the original dataset to train the model. We set the shrinkage of learning to be 0.01, the train fraction to be 0.8 which is equal to the train set we made manually, and the bag fraction to be 0.5 which is the most used one. For cross validation, we chosed 3 which would make sense when combined with the train fraction. Then we wrote a loop for the interaction depth, which is the depth of learning for each tree and used to control overfitting.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+data_gbm <- data_default[,-26]
+data_gbm$default_flag <-ifelse(data_gbm$default_flag=="Yes",1,0)
+data_gbm <- data_gbm[,colnames(data_gbm)!="ID"]
+#data_gbm$default_flag
+data_train_gbm <- data_gbm[t_rain,]
+data_test_gbm <- data_gbm[-t_rain,]
+
+# iter_auc <- matrix(nrow = 2,ncol = 10)
+# for(dep_th in 1:10){
+#   set.seed(1121)
+#   gbm_model <- gbm(default_flag ~ .,
+#       data = data_train_gbm,
+#       n.trees = 5000,
+#       distribution = "bernoulli",
+#       interaction.depth = dep_th,
+#       shrinkage = 0.01,
+#       bag.fraction = 0.5,
+#       train.fraction = 0.8,
+#       cv.folds = 3)
+#   best_iter <- gbm.perf(gbm_model, method = "cv")
+#   iter_auc[1,dep_th] <- best_iter
+#   #gbm_improve <-  summary(gbm_model, n.trees = best_iter)
+#   gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
+#   auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = FALSE)
+#   iter_auc[2,dep_th] <- auc_gbm$auc
+# }
+
+
+
+```
+
+After training we found the optimal model with depth of 9 and tree number of 847.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# set.seed(1121)
+# gbm_model <- gbm(default_flag ~ .,
+#                  data = data_train_gbm,
+#                  n.trees = 5000,
+#                  distribution = "bernoulli",
+#                  interaction.depth = 9,
+#                  shrinkage = 0.01,
+#                  bag.fraction = 0.5,
+#                  train.fraction = 0.8,
+#                  cv.folds = 3)
+# 
+# 
+# summary(gbm_model)
+# 
+# best_iter <- gbm.perf(gbm_model, method = "cv")
+# best_iter
+# # the best ntree is 847
+# gbm_improve <-  summary(gbm_model, n.trees = best_iter)
+# 
+# gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
+# 
+# auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
+# print(auc_gbm)
+# 
+# # The AUC is 0.781
+# # to see the threshold that used to check whether a outcome is default or not
+# coords(auc_gbm,"best")
+# predict_class <- ifelse(gbm_test > coords(auc_gbm,"best")["threshold"],1,0)
+```
+
+We can see from the result that the AUC is 0.7814.
+
+Next we use the age group dataset to train the model. And we would find a model that is optimal with the age group dataset. Then we compare the two models we trained with the AUC.
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+data_gbm_2 <- data_gbm
+data_gbm_2$AGE.group<-cut(data_gbm_2$AGE,c(20,40,60,80))
+#data_gbm$AGE.group
+data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="AGE"]
+data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="ID"]
+data_train_gbm_2 <- data_gbm_2[t_rain,]
+data_test_gbm_2 <- data_gbm_2[-t_rain,]
+
+
+# iter_auc_2 <- matrix(nrow = 2,ncol = 10)
+# for(dep_th in 1:10){
+#   set.seed(1121)
+#   gbm_model <- gbm(default_flag ~ .,
+#                    data = data_train_gbm_2,
+#                    n.trees = 5000,
+#                    distribution = "bernoulli",
+#                    interaction.depth = dep_th,
+#                    shrinkage = 0.01,
+#                    bag.fraction = 0.5,
+#                    train.fraction = 0.8,
+#                    cv.folds = 5)
+#   best_iter <- gbm.perf(gbm_model, method = "cv")
+#   iter_auc_2[1,dep_th] <- best_iter
+#   #gbm_improve <-  summary(gbm_model, n.trees = best_iter)
+#   gbm_test <-  predict(gbm_model, newdata = data_test_gbm_2, n.trees = best_iter)
+#   auc_gbm <-  roc(data_test_gbm_2$default_flag, gbm_test, plot = FALSE)
+#   iter_auc_2[2,dep_th] <- auc_gbm$auc
+# }
+# iter_auc_2
+# write.csv(iter_auc_2,file = "iter_auc_2.csv")
+# which.max(iter_auc_2[2,])
+
+iter_auc <- read.csv("./iter_auc.csv")
+iter_auc_2 <- read.csv("./iter_auc_2.csv")
+
+matplot(1:10,cbind(t(iter_auc[,-1])[,2],t(iter_auc_2[,-1])[,2]),pch = 23,col = c('red','green'),type = 'b',ylab = "AUC",xlab = "depth")
+legend("bottomright",legend=c("Original","Age Group"),pch = 23,col = c('red','green') )
+```
+
+The plot shows that the result of original dataset and the age group dataset is quite similar. But the AUC of age group with depth 5 is higher than the highest AUC with original dataset. So we chosed the age group dataset model to do a boostrap.
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# set.seed(1121)
+# gbm_model_2 <- gbm(default_flag ~ .,
+#                  data = data_train_gbm_2,
+#                  n.trees = 5000,
+#                  distribution = "bernoulli",
+#                  interaction.depth = 5,
+#                  shrinkage = 0.01,
+#                  bag.fraction = 0.5,
+#                  train.fraction = 0.8,
+#                  cv.folds = 3)
+# 
+# 
+# summary(gbm_model_2)
+# 
+# best_iter_2 <- gbm.perf(gbm_model_2, method = "cv")
+# best_iter_2
+# 
+# gbm_improve_2 <-  summary(gbm_model_2, n.trees = best_iter_2)
+# 
+# gbm_test_2 <-  predict(gbm_model_2, newdata = data_test_gbm_2, n.trees = best_iter_2)
+# 
+# auc_gbm_2 <-  roc(data_test_gbm_2$default_flag, gbm_test_2, plot = TRUE, col = "red")
+# print(auc_gbm_2)
+
+# Area under the curve : 0.782 , which is better than original one
+
+```
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+# boot_strap_gbm <- sapply(1:10, function(x) {
+#   train_set <- sample(1:30000,24000)
+#   data_gbm_2 <- data_gbm
+#   data_gbm_2$AGE.group<-cut(data_gbm_2$AGE,c(20,40,60,80))
+#   data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="AGE"]
+#   data_gbm_2 <- data_gbm_2[,colnames(data_gbm_2)!="ID"]
+#   train <- data_gbm_2[train_set,]
+#   test <- data_gbm_2[-train_set,]
+#   boot_sample <-gbm(default_flag ~ .,
+#                     data = train,
+#                     n.trees = 1276,
+#                     distribution = "bernoulli",
+#                     interaction.depth = 5,
+#                     shrinkage = 0.01,
+#                     bag.fraction = 0.5,
+#                     train.fraction = 0.8,
+#                     cv.folds = 3)
+#   gbm_test <-  predict(boot_sample, newdata = test, n.trees = 1276)
+#   auc <-  roc(test$default_flag, gbm_test, plot = FALSE, col = "red")
+#   predict_class <- ifelse(gbm_test > coords(auc,"best")["threshold"],1,0)
+#   test_err <- with(data_gbm[-train_set,], cumsum( default_flag!=predict_class)[length(predict_class)]/(length(predict_class)))
+#   c(test_err=test_err,auc=auc$auc)
+#   
+#   })
+# boot_strap_gbm <- t(boot_strap_gbm)
+# apply(boot_strap_gbm,2,quantile)
+# apply(boot_strap_gbm,2,mean)
+#      test_err   auc
+# 0%      0.211 0.774
+# 25%     0.223 0.782
+# 50%     0.234 0.784
+# 75%     0.241 0.786
+# 100%    0.261 0.801
+
+# mean
+# test_err      auc 
+#    0.233    0.784
+```
+
+In order to present the dynamic performance of the GBM model, we created a shiny APP to show how the parameters change could influence the AUC of the model.
+
+```{r, eval=TRUE, echo=FALSE, cache=FALSE}
+# library(shiny)
+# shinyAppDir(
+#   appDir="GBM Performance",
+#   options=list(width="100%", height=400)
+#   )  # end shinyAppDir
+```
+
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+library(shiny)
+
+inter_face <- shiny::fluidPage(
+  titlePanel("GBM Performance"),
+  # Create slider inputs with parameters to auc
+  fluidRow(
+    column(width=4, sliderInput("n.trees", label="ntree:",
+                                min=0, max=3000, value=500, step=100)),
+    column(width=4, sliderInput("interaction.depth", label="depth:",
+                                min=0, max=10, value=2, step=1)),
+    column(width=4, sliderInput("shrinkage", label="shrinkage:",
+                                min=0, max=0.3, value=0.1, step=0.01)),
+    column(width=4, sliderInput("bag.fraction", label="bag fraction:",
+                                min=0, max=1, value=0.5, step=0.1)),
+    column(width=4, sliderInput("train.fraction", label="train fraction:",
+                                min=0, max=1, value=0.8, step=0.1))),
+  column(5,
+         "ROC",
+         
+         # With the conditionalPanel, the condition is a JavaScript
+         # expression. In these expressions, input values like
+         # input$n are accessed with dots, as in input.n
+         plotOutput("auc_gbm", height = 800,width = 800)
+  ),
+  column(4,textOutput("text")),
+  
+  
+  # end fluidRow
+  
+  # Render plot in panel
+  mainPanel(plotOutput("GBM Performance", width="150%", height=500))
+  
+) 
+
+ser_ver <- function(input, output) {
+  
+  ## Re-calculate the model with new parameters
+  # The function reactive() accepts a block of expressions
+  # which calculate the model, and returns the model output.
+  da_ta <- reactive({
+    
+    # Extract model parameters from the argument "input"
+    n.trees <- input$n.trees
+    interaction.depth <- input$interaction.depth
+    shrinkage <- input$shrinkage
+    bag.fraction <- input$bag.fraction
+    train.fraction <- input$train.fraction
+    
+    
+    # train the model
+    gbm_model <- gbm(default_flag ~ .,
+                     data = data_train_gbm,
+                     n.trees = n.trees,
+                     distribution = "bernoulli",
+                     interaction.depth = interaction.depth,
+                     shrinkage = shrinkage,
+                     bag.fraction = bag.fraction,
+                     train.fraction = train.fraction)
+    
+    gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = n.trees)
+    
+    
+    auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = FALSE)
+    
+    round(auc_gbm$auc,digits = 3)
+    
+  })
+  
+  output$auc_gbm <- renderPlot({
+    
+    # extract model parameters
+    n.trees <- input$n.trees
+    interaction.depth <- input$interaction.depth
+    shrinkage <- input$shrinkage
+    bag.fraction <- input$bag.fraction
+    train.fraction <- input$train.fraction
+    
+    
+    gbm_model <- gbm(default_flag ~ .,
+                     data = data_train_gbm,
+                     n.trees = n.trees,
+                     distribution = "bernoulli",
+                     interaction.depth = interaction.depth,
+                     shrinkage = shrinkage,
+                     bag.fraction = bag.fraction,
+                     train.fraction = train.fraction)
+    
+    gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = n.trees)
+    
+    
+    #plot ROC
+    roc<-roc(data_test_gbm$default_flag, gbm_test, plot = TRUE)
+    plot(roc)
+    
+    
+  
+    #text of parameters
+    text(0,0.3,
+       lab=paste0(
+        "ntree = ", format(n.trees, digits=3), "\n",
+        "depth = ", format(interaction.depth, digits=3), "\n",
+        "shrinkage = ", format(shrinkage, digits=3), "\n",
+        "bag fraction = ", format(bag.fraction, digits=3), "\n",
+        "train fraction = ", format(train.fraction, digits=3), "\n",
+        "AUC = ", da_ta()),
+    adj=c(1, 1), cex=1.2, lwd=2)
+  })
+}
+
+
+app <- shinyApp(inter_face, ser_ver)
+runApp(app)
+
+```
+
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+
+
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+
+
+
+
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+## Results
+
+## Ideas about further development of project
+
+
+
