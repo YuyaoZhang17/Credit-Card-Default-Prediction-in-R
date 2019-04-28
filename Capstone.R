@@ -23,6 +23,7 @@ library(pROC)
 
 
 
+
 #import data
 print("Import Data")
 data <- read.csv("D:/NYU/Curriculum/CapstoneProject/UCI_Credit_Card.csv",header=TRUE)
@@ -245,11 +246,13 @@ set.seed(1121)
 t_rain <- sample(1:nrow(data_rf),n_train)
 
 data_train_rf <- data_rf[t_rain,]
+data_test_rf <- data_rf[-t_rain,]
 
 
 
 oob_err <- matrix(nrow=5,ncol=23) # the out-of-bag error
 test_err <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
+auc_rf <- matrix(nrow = 5,ncol = 23)
 # mtry is the variable number that each tree will split 
 
 
@@ -260,8 +263,11 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[1])
   oob_err[1,mtry] <- random_forest$err.rate[n_tree[1]]
+  class_rf <- predict(random_forest, data_rf[-t_rain,],type = "prob")
   pred <- predict(random_forest, data_rf[-t_rain,])
   test_err[1,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf[1,mtry] <- auc(roc(data_test_rf$default_flag,class_rf[,2]))
+  
 }
 
 # for tree number equals 50  
@@ -270,8 +276,11 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[2])
   oob_err[2,mtry] <- random_forest$err.rate[n_tree[2]]
+  class_rf <- predict(random_forest, data_rf[-t_rain,],type = "prob")
   pred <- predict(random_forest, data_rf[-t_rain,])
   test_err[2,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf[2,mtry] <- auc(roc(data_test_rf$default_flag,class_rf[,2]))
+  
 }
 
 
@@ -281,8 +290,10 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[3])
   oob_err[3,mtry] <- random_forest$err.rate[n_tree[3]]
+  class_rf <- predict(random_forest, data_rf[-t_rain,],type = "prob")
   pred <- predict(random_forest, data_rf[-t_rain,])
   test_err[3,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf[3,mtry] <- auc(roc(data_test_rf$default_flag,class_rf[,2]))
 }
 
 # for tree number equals 150
@@ -290,9 +301,11 @@ for (mtry in 1:23){
   set.seed(1121)
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[4])
-  oob_err[4,mtry] <- random_forest$err.rate[n_tree[4]]
+  oob_err[4,mtry] <- random_forest$err.rate[n_tree[1]]
+  class_rf <- predict(random_forest, data_rf[-t_rain,],type = "prob")
   pred <- predict(random_forest, data_rf[-t_rain,])
   test_err[4,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf[4,mtry] <- auc(roc(data_test_rf$default_flag,class_rf[,2]))
 }
 
 # for tree number equals 200
@@ -301,13 +314,17 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
                                 subset=t_rain,mtry=mtry,ntree=n_tree[5])
   oob_err[5,mtry] <- random_forest$err.rate[n_tree[5]]
+  class_rf <- predict(random_forest, data_rf[-t_rain,],type = "prob")
   pred <- predict(random_forest, data_rf[-t_rain,])
   test_err[5,mtry] <- with(data_rf[-t_rain,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf[5,mtry] <- auc(roc(data_test_rf$default_flag,class_rf[,2]))
 }
 
 write.csv(oob_err,file = "oob_err.csv")
 write.csv(test_err,file = "test_err.csv")
+write.csv(auc_rf,file = "auc_rf.csv")
 
+auc_rf
 test_err
 oob_err
 apply(test_err,1,min)
@@ -315,13 +332,17 @@ apply(oob_err,1,min)
 
 oob_err <- read.csv("D:/NYU/Curriculum/CapstoneProject/oob_err.csv")
 test_err <- read.csv("D:/NYU/Curriculum/CapstoneProject/test_err.csv")
+auc_rf <- read.csv("D:/NYU/Curriculum/CapstoneProject/auc_rf.csv")
 
-
-matplot(1:mtry, t(test_err[,-1]), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
+matplot(1:mtry, t(test_err), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="Test Error")
 legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
 
 matplot(1:mtry, t(oob_err), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
+
+matplot(1:mtry, t(auc_rf), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="AUC")
+legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
+
 
 matplot(3:mtry, t(test_err[2:5,3:23]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="Test Error")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
@@ -329,11 +350,18 @@ legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","bla
 matplot(3:mtry, t(oob_err[2:5,3:23]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
 
+matplot(3:mtry, t(auc_rf[2:5,3:23]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="AUC")
+legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
+
 
 
 
 table(apply(test_err,2,which.min))
 which.min(test_err)
+which.max(auc_rf)
+# 55 200,11
+max(auc_rf)
+#0.766736
 min(test_err)
 oob_err[5,4]
 which.min(oob_err[5,])
@@ -357,10 +385,6 @@ which.min(test_err[5,])
 # random_forest_100 <- randomForest(formula=default_flag ~ .,data=data_default,
 #                                   subset = t_rain,mtry=3,ntree=100)
 # random_forest_100
-set.seed(1121)
-random_forest <- randomForest(formula=default_flag ~ .,data=data_rf,
-                              subset=t_rain,mtry=4,ntree=200)
-random_forest$confusion
 
 # try to adjust the age into age groups
 data_rf_2 <- data_rf
@@ -369,12 +393,14 @@ data_rf_2$AGE.group<-cut(data_rf_2$AGE,c(20,40,60,80))
 data_rf_2 <- data_rf_2[,colnames(data_rf_2)!="AGE"]
 data_rf_2 <- data_rf_2[,colnames(data_rf_2)!="ID"]
 
-head(data_rf_2)
 
 n_train_2 <- 0.8*nrow(data_rf_2)
 set.seed(1121)
 t_rain_2 <- sample(1:nrow(data_rf_2),n_train_2)
 
+data_train_rf_2 <- data_rf_2[t_rain_2,]
+data_test_rf_2 <- data_rf_2[-t_rain_2,]
+auc_rf_2 <- matrix(nrow = 5,ncol = 23)
 oob_err_2 <- matrix(nrow=5,ncol=23) # the out-of-bag error
 test_err_2 <- matrix(nrow=5,ncol=23) # test_error, which is the mean_squared error
 # mtry is the variable number that each tree will split 
@@ -385,9 +411,11 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[1])
   oob_err_2[1,mtry] <- random_forest$err.rate[n_tree[1]]
+  class_rf <- predict(random_forest, data_rf_2[-t_rain_2,],type = "prob")
   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
   test_err_2[1,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
-}
+  auc_rf_2[1,mtry] <- auc(roc(data_test_rf_2$default_flag,class_rf[,2]))
+  }
 
 # for tree number equals 50  
 for (mtry in 1:23){
@@ -395,8 +423,10 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[2])
   oob_err_2[2,mtry] <- random_forest$err.rate[n_tree[2]]
+  class_rf <- predict(random_forest, data_rf_2[-t_rain_2,],type = "prob")
   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
   test_err_2[2,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf_2[2,mtry] <- auc(roc(data_test_rf_2$default_flag,class_rf[,2]))
 }
 
 # for tree number equals 100
@@ -405,8 +435,10 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[3])
   oob_err_2[3,mtry] <- random_forest$err.rate[n_tree[3]]
+  class_rf <- predict(random_forest, data_rf_2[-t_rain_2,],type = "prob")
   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
   test_err_2[3,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf_2[3,mtry] <- auc(roc(data_test_rf_2$default_flag,class_rf[,2]))
 }
 
 # for tree number equals 150
@@ -415,8 +447,10 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[4])
   oob_err_2[4,mtry] <- random_forest$err.rate[n_tree[4]]
+  class_rf <- predict(random_forest, data_rf_2[-t_rain_2,],type = "prob")
   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
   test_err_2[4,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf_2[4,mtry] <- auc(roc(data_test_rf_2$default_flag,class_rf[,2]))
 }
 
 # for tree number equals 200
@@ -425,14 +459,18 @@ for (mtry in 1:23){
   random_forest <- randomForest(formula=default_flag ~ .,data=data_rf_2,
                                 subset=t_rain_2,mtry=mtry,ntree=n_tree[5])
   oob_err_2[5,mtry] <- random_forest$err.rate[n_tree[5]]
+  class_rf <- predict(random_forest, data_rf_2[-t_rain_2,],type = "prob")
   pred <- predict(random_forest, data_rf_2[-t_rain_2,])
   test_err_2[5,mtry] <- with(data_rf_2[-t_rain_2,], cumsum( default_flag!=pred)[length(pred)]/(length(pred)))
+  auc_rf_2[5,mtry] <- auc(roc(data_test_rf_2$default_flag,class_rf[,2]))
 }
 
 
 write.csv(oob_err_2,file = "oob_err_2.csv")
 write.csv(test_err_2,file = "test_err_2.csv")
+write.csv(auc_rf_2,file = "auc_rf_2.csv")
 
+max(auc_rf_2)>max(auc_rf)
 which.min(test_err_2)
 min(oob_err_2)
 min(test_err_2)<min(test_err)
@@ -454,20 +492,30 @@ legend("topright",legend=c("Original","Age Group"),pch = 23,col = c('red','green
 
 sum(test_err<test_err_2)/(23*5)
 
+
+
+
+
 # do a bootstrap of random forest
-boot_strap_rf <- sapply(1:10, function(x) {
+boot_strap_rf <- sapply(1:100, function(x) {
   train_set <- sample(1:30000,24000)
   train <- data_rf[train_set,]
   test <- data_rf[-train_set,]
   boot_sample <- randomForest(formula=default_flag ~ .,data=data_rf,
-                                              subset=train_set,mtry=4,ntree=200)
-  rf_test <-  predict(random_forest, data_rf[-train_set,])
-  with(data_rf[-train_set,], cumsum( default_flag!=rf_test)[length(rf_test)]/(length(rf_test)))
+                                              subset=train_set,mtry=11,ntree=200)
+  rf_test <-  predict(boot_sample, test)
+  test_err <- with(test, cumsum( default_flag!=rf_test)[length(rf_test)]/(length(rf_test)))
+  class_rf <- predict(boot_sample,test,type = "prob")
+  auc <- auc(roc(test$default_flag,class_rf[,2]))
+  c(auc=auc,test_err=test_err)
+  
 })
 
 boot_strap_rf <- t(boot_strap_rf)
-mean(boot_strap_rf)
-
+mean(boot_strap_rf[,1])
+re_sult_rf <- apply(boot_strap_rf,2,quantile)
+write.csv(re_sult_rf,file = "result of random forest bootstrap.csv")
+re_sult_rf
 # the mean of test error of random forest is 0.1484833
 
 # gradient boosting machine model
@@ -528,8 +576,19 @@ gbm_test <-  predict(gbm_model, newdata = data_test_gbm, n.trees = best_iter)
 
 auc_gbm <-  roc(data_test_gbm$default_flag, gbm_test, plot = TRUE, col = "red")
 print(auc_gbm)
+
+#Call:
+# roc.default(response = data_test_gbm$default_flag, predictor = gbm_test,     plot = TRUE, col = "red")
+# 
+# Data: gbm_test in 4666 controls (data_test_gbm$default_flag 0) < 1334 cases (data_test_gbm$default_flag 1).
+# Area under the curve: 0.781
+
+
 # to see the threshold that used to check whether a outcome is default or not
 coords(auc_gbm,"best")
+
+# threshold specificity sensitivity 
+# -1.223       0.819       0.626
 predict_class <- ifelse(gbm_test > coords(auc_gbm,"best")["threshold"],1,0)
 
 #Area under the curve: 0.7814
@@ -579,7 +638,7 @@ gbm_model_2 <- gbm(default_flag ~ .,
                  n.trees = 5000,
                  distribution = "bernoulli",
                  interaction.depth = 5,
-                 shrinkage = 0.1,
+                 shrinkage = 0.01,
                  bag.fraction = 0.5,
                  train.fraction = 0.8,
                  cv.folds = 3)
@@ -596,6 +655,10 @@ gbm_test_2 <-  predict(gbm_model_2, newdata = data_test_gbm_2, n.trees = best_it
 
 auc_gbm_2 <-  roc(data_test_gbm_2$default_flag, gbm_test_2, plot = TRUE, col = "red")
 print(auc_gbm_2)
+
+coords(auc_gbm_2,"best")
+
+
 
 #Call:
 # roc.default(response = data_test_gbm_2$default_flag, predictor = gbm_test_2,     plot = TRUE, col = "red")
@@ -632,7 +695,7 @@ print(auc_gbm_2)
 # the mean of bootstrap of gbm is 0.7845102
 
 # do a bootstrap to calculate test error
-boot_strap_gbm <- sapply(1:10, function(x) {
+boot_strap_gbm_2 <- sapply(1:100, function(x) {
   train_set <- sample(1:30000,24000)
   data_gbm_2 <- data_gbm
   data_gbm_2$AGE.group<-cut(data_gbm_2$AGE,c(20,40,60,80))
@@ -652,14 +715,87 @@ boot_strap_gbm <- sapply(1:10, function(x) {
   gbm_test <-  predict(boot_sample, newdata = test, n.trees = 1276)
   auc <-  roc(test$default_flag, gbm_test, plot = FALSE, col = "red")
   predict_class <- ifelse(gbm_test > coords(auc,"best")["threshold"],1,0)
-  test_err <- with(data_gbm[-train_set,], cumsum( default_flag!=predict_class)[length(predict_class)]/(length(predict_class)))
+  test_err <- with(test, cumsum( default_flag!=predict_class)[length(predict_class)]/(length(predict_class)))
   c(test_err=test_err,auc=auc$auc)
   
   })
+boot_strap_gbm_2 <- t(boot_strap_gbm_2)
+apply(boot_strap_gbm_2,2,quantile)
+apply(boot_strap_gbm_2,2,mean)
+re_sult_gbm_2 <- apply(boot_strap_gbm_2,2,quantile)
+write.csv(re_sult_gbm_2,file = "result of gbm boostrap 2.csv")
+# the mean of test error is 0.233
+
+# test_err   auc
+# 0%      0.191 0.764
+# 25%     0.222 0.780
+# 50%     0.232 0.785
+# 75%     0.244 0.790
+# 100%    0.271 0.798
+# 
+# 
+# test_err      auc 
+# 0.233    0.785
+
+
+boot_strap_gbm <- sapply(1:100, function(x) {
+  train_set <- sample(1:30000,24000)
+  train <- data_gbm[train_set,]
+  test <- data_gbm[-train_set,]
+  boot_sample <-gbm(default_flag ~ .,
+                    data = train,
+                    n.trees = 847,
+                    distribution = "bernoulli",
+                    interaction.depth = 9,
+                    shrinkage = 0.01,
+                    bag.fraction = 0.5,
+                    train.fraction = 0.8,
+                    cv.folds = 3)
+  gbm_test <-  predict(boot_sample, newdata = test, n.trees = 847)
+  auc <-  roc(test$default_flag, gbm_test, plot = FALSE, col = "red")
+  predict_class <- ifelse(gbm_test > coords(auc,"best")["threshold"],1,0)
+  test_err <- with(test, cumsum( default_flag!=predict_class)[length(predict_class)]/(length(predict_class)))
+  c(test_err=test_err,auc=auc$auc)
+  
+})
 boot_strap_gbm <- t(boot_strap_gbm)
 apply(boot_strap_gbm,2,quantile)
 apply(boot_strap_gbm,2,mean)
-# the mean of test error is 0.233
+re_sult_gbm <- apply(boot_strap_gbm,2,quantile)
+write.csv(re_sult_gbm,file = "result of gbm boostrap.csv")
+
+# test_err   auc
+# 0%      0.202 0.767
+# 25%     0.224 0.779
+# 50%     0.236 0.783
+# 75%     0.249 0.786
+# 100%    0.272 0.799
+# 
+# 
+# test_err      auc 
+# 0.235    0.783 
+
+
+#Random Forest 
+
+# 30000 samples
+# 23 predictor
+# 2 classes: 'No', 'Yes' 
+# 
+# No pre-processing
+# Resampling: Cross-Validated (10 fold, repeated 3 times) 
+# Summary of sample sizes: 26999, 27000, 27000, 27000, 26999, 27000, ... 
+# Resampling results:
+#   
+#   Accuracy  Kappa
+# 0.82      0.364
+# 
+# Tuning parameter 'mtry' was held constant at a value of 4.8
+
+# use caret to tune the parameters
+
+
+
 
 
 # 
