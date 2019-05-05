@@ -5,14 +5,12 @@ library(funModeling)
 library(ggplot2)
 #install.packages('corrplot')
 library(corrplot)
-library(scales)
 #install.packages("psych")
 library(psych)
 #install.packages("GPArotation")
 library(GPArotation)
 #install.packages('randomForest')
-#install.packages('rfUtilities')
-library(rfUtilities)
+
 library(randomForest)
 #install.packages("gbm")
 library(gbm)
@@ -20,7 +18,8 @@ library(gbm)
 library(pROC)
 #install.packages("xgboost")
 #library(xgboost)
-
+#install.packages("h2o")
+library(h2o)
 
 
 
@@ -204,8 +203,10 @@ df_status(data_pca)
 pca_default <- prcomp(data_pca,center = TRUE,scale. = TRUE)
 summary(pca_default)
 
+
 str(pca_default)
 biplot(pca_default,var.axes=TRUE)
+
 
 screeplot(pca_default)
 screeplot(pca_default,type="lines")
@@ -233,6 +234,123 @@ head(fa_model_quartimax$scores,3)
 factor.plot(fa_model_quartimax)
 fa.diagram(fa_model_quartimax,simple = FALSE)
 
+# ANN part
+
+h2o.init(nthreads=-1)
+
+data_ann1 <- data
+colnames(data_ann1)[25] <- "default_flag"
+data_ann1$default_flag <- as.factor(data_ann1$default_flag)
+data_train_ann1 <- data_ann1[,-1][t_rain,]
+data_test_ann1 <- data_ann1[,-1][-t_rain,]
+
+# parameters tuning
+
+hyper_params <- list(
+  activation=c("Rectifier","Tanh","Maxout"),
+  
+  hidden=list(c(2),c(4),c(6),c(8),c(10),c(12),c(14),c(16),c(18),c(20),
+              c(2,2),c(4,4),c(6,6),c(8,8),c(10,10),c(12,12),c(16,16),c(20,20),
+              c(4,2),c(6,2),c(6,4),c(8,4),c(8,6),c(10,6),c(10,8),
+              c(12,6),c(12,8),c(12,10),c(16,10),c(16,12),c(16,12),
+              c(20,12),c(20,14),c(20,16)),
+  epochs = c(10, 50, 100),
+  #rate=c(0.01,0.02,0.05),
+  l1=seq(0,1e-4,1e-6),
+  l2=seq(0,1e-4,1e-6)
+)
+
+search_criteria = list(strategy = "RandomDiscrete", 
+                       max_runtime_secs = 360, 
+                       max_models = 100, 
+                       seed=1121, 
+                       stopping_rounds=5, 
+                       stopping_tolerance=1e-2)
+
+dl_grid <- h2o.grid(
+  algorithm="deeplearning",
+  grid_id = "dl_grid",
+  training_frame=as.h2o(data_train_ann1,),
+  y='default_flag',
+  #epochs=1,
+  #stopping_metric="RMSE",
+  stopping_metric="AUC",
+  stopping_tolerance=1e-2,        ## stop when logloss does not improve by >=1% for 2 scoring events
+  stopping_rounds=2,
+  #score_validation_samples=1000, ## downsample validation set for faster scoring
+  #score_duty_cycle=0.025,         ## don't score more than 2.5% of the wall time
+  max_w2=10,                      ## can help improve stability for Rectifier
+  hyper_params = hyper_params,
+  search_criteria = search_criteria
+)                                
+
+grid <- h2o.getGrid("dl_grid",sort_by="AUC",decreasing=TRUE)
+grid@summary_table[1,]
+best_model <- h2o.getModel(grid@model_ids[[1]]) 
+best_model
+
+# After grid search, we find the best model, where hidden layer is (16,16),
+# activation function is Rectifier.
+data_ann <- data
+colnames(data_ann)[25] <- "default_flag"
+data_train_ann <- data_ann[,-1][t_rain,]
+data_test_ann <- data_ann[,-1][-t_rain,]
+
+classifier=h2o.deeplearning(y='default_flag',
+                            training_frame=as.h2o(data_train_ann,),
+                            activation='Rectifier',
+                            hidden=c(16,16),
+                            epochs=100,
+                            train_samples_per_iteration=-2)
+prob_pred=h2o.predict(classifier, newdata=as.h2o(data_test_ann[-24]))
+y_prob_pred=as.vector(prob_pred)
+y_pred=(prob_pred>0.5)
+y_pred=as.vector(y_pred)
+
+# get the performance data
+# confusion matrix
+cm=table(data_test_ann[,24],y_pred)
+# accuracy
+accuracy=(cm[1,1]+cm[2,2])/length(y_pred)
+# mse
+perf = h2o.performance(model = classifier,newdata=as.h2o(data_test_ann))
+h2o.mse(perf)
+# auc                                      
+auc_ann = roc(data_test_ann$default_flag, y_prob_pred, plot = TRUE)
+print(auc_ann)
+
+# bootstrapping
+
+# do a bootstrap of random forest
+boot_strap_ann <- sapply(1:10, function(x) {
+  train_index_ann <- sample(1:30000,24000)
+  train_ann_boot <- data_ann[,-1][train_index_ann,]
+  test_ann_boot <- data_ann[,-1][-train_index_ann,]
+  boot_sample_ann=h2o.deeplearning(y='default_flag',
+                                   training_frame=as.h2o(train_ann_boot,),
+                                   activation='Rectifier',
+                                   hidden=c(16,16),
+                                   epochs=100,
+                                   train_samples_per_iteration=-2)
+  prob_ann=h2o.predict(boot_sample_ann, newdata=as.h2o(test_ann_boot[-24]))
+  y_pred_ann=(prob_ann>0.5)
+  y_pred_ann=as.vector(y_pred_ann)
+  
+  auc <-  roc(test_ann_boot$default_flag, y_pred_ann, plot = FALSE, col = "red")
+  predict_class <- ifelse(y_pred_ann > coords(auc,"best")["threshold"],1,0)
+  cm=table(test_ann_boot[,24],y_pred_ann)
+  # accuracy
+  accuracy=(cm[1,1]+cm[2,2])/length(y_pred)
+  
+  c(accuracy=accuracy,auc=auc$auc)
+  
+})
+
+boot_strap_ann<- t(boot_strap_ann)
+apply(boot_strap_ann,2,quantile)
+apply(boot_strap_ann,2,mean)
+
+h2o.shutdown()
 
 # the random forest prediction
 
