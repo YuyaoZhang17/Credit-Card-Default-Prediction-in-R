@@ -6,7 +6,9 @@ date: '`r format(Sys.Date(), "%m/%d/%Y")`'
 email: yz4026@nyu.edu, ma4895@nyu.edu
 css: slides.css
 output:
-  html_document:
+  # html_document:
+  #   fig_caption: true
+  word_document:
     fig_caption: true
 # output:
 # pdf_document: default
@@ -73,7 +75,17 @@ UC Business Analytics R Programming Guide, Gradient Boosting Machines is quite a
 
 ## Packages that we used
 
-ggplot2: This is 
+ggplot2: This is a package of graphics, specifically a system based on the grammer of graphics to create plots. We use this package to draw all the relationships of our features and the demonstrate the trends or distribution of our data.
+
+corrplot: This is a package which displays a correlation matrix, confidence interval. We use this package to show the correlation of the limit balance features.
+
+psych: This is a package for multivariate analysis and scale construction using factor analysis, principal component analysis, cluster analysis and reliability analysis. We use this package to show the status of our engineered data and help us to do further PCA and factor analysis.
+
+randomForest: THis is the package of realizing random forest training in R.It contains the methods of classification and regression based on a forest of trees using random inputs. We use this package to bulid the random forest model, predict the outcome and tune the parameters.
+
+gbm: This is the package of implementation of extensions to Freund and Schapire's AdaBoost algorithm and Friedman's gradient boosting machine. Here we use the function of bernoulli as the loss function and do the training of classification.
+
+pROC: This is the package we use to visualize, smooth and compare receiver operating characteristic and plot the ROC. I t can also be used to calculate the AUC which we used to compare the results of different models' performance.
 
 ## Data Processing
 
@@ -297,30 +309,26 @@ Conclusion: When get the correlations between limit balances,bill amounts and pa
 
 For this part, we meant to use PCA to reduce dimension for furthur step.
 
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,out.width="450",fig.cap=c("Biplot of PCA","Screeplot 01","Screeplot 02")}
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,out.width="450"}
 data_pca <- data
 data_pca <- data_pca[,1:24]
 #df_status(data_pca)
 pca_default <- prcomp(data_pca,center = TRUE,scale. = TRUE)
 summary(pca_default)
 
-#str(pca_default)
-biplot(pca_default,var.axes=TRUE)
+```
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,out.width="450",fig.cap=c("Screeplot 01","Screeplot 02")}
 
 screeplot(pca_default)
 screeplot(pca_default,type="lines")
-#predict(pca_default)
 
-#principal(data_pca[,-1],nfactors=5)
 ```
-
 The result of PCA is not good because the 20th component has the cumulative variance of 99% of all 24 variables. We think this maybe not suitable for dimension reduction. Maybe it is because the scale step is not suitable for some features which only has 0-3 numbers.
 
-And we do further step about parallel analysis to see whether we can process a factor anlysis. We use two methods of rotation and get similar results. From the result of factor anlysis, we found that the first 8 factors which recommended by parallel anlysis can inly explain 54% of the varaince of data, which is too low to reduce dimension.
+And we do further step about parallel analysis to see whether we can process a factor anlysis. We use two methods of rotation and get similar results. 
 
-So we finally just drop the ID feature and remain all other features to do model training.
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,fig.cap=c("factor plot of varimax rotation","diagram of varimax rotation","factor plot of quartimax rotaion","diagram of quartimax rotation"),out.width="400"}
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,fig.cap=c("factor plot of varimax rotation","diagram of varimax rotation"),out.width="400"}
 fa.parallel(data_pca)
 
 #fa(data_pca, nfactors=8,rotate="none", fm='ml')
@@ -334,16 +342,26 @@ fa_model_varimax <- fa(data_pca,nfactors = 8,rotate = 'varimax',fm='ml',scores =
 factor.plot(fa_model_varimax)
 fa.diagram(fa_model_varimax,simple = FALSE)
 
+```
+
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,fig.cap=c("factor plot of quartimax rotaion","diagram of quartimax rotation"),out.width="400"}
 fa_model_quartimax <- fa(data_pca,nfactors = 8,rotate = 'quartimax' ,fm='ml',scores = TRUE)
 #fa_model_quartimax
 #head(fa_model_quartimax$scores,3)
 factor.plot(fa_model_quartimax)
 fa.diagram(fa_model_quartimax,simple = FALSE)
+
 ```
 
+From the result of factor anlysis, we found that the first 8 factors which recommended by parallel anlysis can inly explain 54% of the varaince of data, which is too low to reduce dimension.
 
+So we finally just drop the ID feature and remain all other features to do model training.
 
 ## Models comparison
+
+For this project, we use three models to train the dataset and want to get the optimal model to predict the default of credit cards. The criteria of choosing the best model is to calculate their test error and area under ROC.
+
+For each model we use the same training dataset in order to make them comparable. And we also add the age group feature for the sake of it could be used to predict the default more accurately. The outcome varies for different models.
 
 ### ANN
 
@@ -351,7 +369,7 @@ fa.diagram(fa_model_quartimax,simple = FALSE)
 
 This part we use the random forest method to do the training. Random forest is an ensemble learning method for classification and regression. It will construct a forest with many trees with each tree fits a certain amount of inputs. The outcome randomForest package to train the model. After training, predictions for unseen samples can be made by averaging the predictions from all the individual regression trees on samples. And the package we use is randomForest.
 
-First we need to split the data into train set and test set.
+First we need to split the data into train set and test set. In order to make the same dataset we set seed of 1121. We make 80% of data to be train set and the other 20% to be test set. So we got 24000 rows of train set and 6000 rows of test set.
 
 ```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
 # seperating the training and testing samples,we want to 
@@ -387,7 +405,7 @@ legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","bl
 matplot(xlab = "mtry", t(oob_err[,-1]), pch = 23, col = c("red","orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
 
-matplot(1:mtry, t(auc_rf[,-1]), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="AUC")
+matplot(xlab = "mtry", t(auc_rf[,-1]), pch=23,col = c("red","orange","green","blue","black") ,type = "b", ylab="AUC")
 legend("topright",legend=n_tree,pch=23,col = c("red","orange","green","blue","black") )
 
 
@@ -397,7 +415,7 @@ legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","bla
 matplot(xlab = "mtry", t(oob_err[2:5,4:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="OOB Error")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
 
-matplot(3:mtry, t(auc_rf[2:5,4:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="AUC")
+matplot(xlab = "mtry", t(auc_rf[2:5,4:24]), pch=23,col = c("orange","green","blue","black") ,type = "b", ylab="AUC")
 legend("topright",legend=n_tree[2:5],pch=23,col = c("orange","green","blue","black") )
 
 
@@ -543,19 +561,13 @@ knitr::kable(re_sult_gbm, caption = "Result of Bootstrap of GBM with Original da
 
 In order to present the dynamic performance of the GBM model, we created a shiny APP to show how the parameters change could influence the AUC of the model. (file GBM Performance)
 
-
-
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
-
-```
-
-
-
+The result of GBM is not better than random forest for two reasons: First, our dataset contains 24 features to predict the default outcome, this structure requires the width of model to train but not that much on the depth of training. So that the deepening training method GBM fails to capture as many features as random forest; Second, random forest has the advantage of parallel computing which helps to train high dimension dataset but GBM links consequent trees orderly and can not be used to train parallelly. 
 
 ```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
 
 ```
+
+
 
 
 ```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
@@ -568,6 +580,11 @@ In order to present the dynamic performance of the GBM model, we created a shiny
 ```
 
 
+```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+
+```
+
+
 
 ```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
 
@@ -580,7 +597,12 @@ In order to present the dynamic performance of the GBM model, we created a shiny
 ```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
 
 ```
-## Results
+
+
+## Conclusion
+
+
+
 
 ## Ideas about further development of project
 
