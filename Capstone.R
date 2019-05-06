@@ -234,11 +234,22 @@ head(fa_model_quartimax$scores,3)
 factor.plot(fa_model_quartimax)
 fa.diagram(fa_model_quartimax,simple = FALSE)
 
+# split the train and test set
+
+n_train <- 0.8*nrow(data)
+set.seed(1121)
+t_rain <- sample(1:nrow(data),n_train)
+
+
 # ANN part
 
 h2o.init(nthreads=-1)
 
+
 data_ann1 <- data
+
+
+
 colnames(data_ann1)[25] <- "default_flag"
 data_ann1$default_flag <- as.factor(data_ann1$default_flag)
 data_train_ann1 <- data_ann1[,-1][t_rain,]
@@ -359,9 +370,9 @@ h2o.shutdown()
 
 data_rf <- data_default[,-26]
 data_rf <- data_rf[,colnames(data_rf)!="ID"]
-n_train <- 0.8*nrow(data_rf)
-set.seed(1121)
-t_rain <- sample(1:nrow(data_rf),n_train)
+# n_train <- 0.8*nrow(data_rf)
+# set.seed(1121)
+# t_rain <- sample(1:nrow(data_rf),n_train)
 
 data_train_rf <- data_rf[t_rain,]
 data_test_rf <- data_rf[-t_rain,]
