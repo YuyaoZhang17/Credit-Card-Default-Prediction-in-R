@@ -6,10 +6,9 @@ date: '`r format(Sys.Date(), "%m/%d/%Y")`'
 email: yz4026@nyu.edu, ma4895@nyu.edu
 css: slides.css
 output:
-  # html_document:
-  #   fig_caption: true
-  word_document:
+  html_document:
     fig_caption: true
+
 # output:
 # pdf_document: default
 # html_document: default
@@ -62,15 +61,19 @@ Nowadays, lending credit has increasingly become a popular practice in financial
 
 This project is derived from the kaggle dataset Default Payments of Credit Card Clients in Taiwan in 2005. This dataset contains information on default payments, demographic factors, credit data, history of payment, and bill statements of credit card clients in Taiwan from April 2005 to September 2005. We will use this dataset to train an efficient and effective model that can detect potential default with similar dataset given. The models we would compare are Neural Network, Random Forest and Gradient Boosting Machine.
 
+
 ## Literature Review 
-For this project, we read some papers and online tutorials, basically related to the packages that we would use and theories about different machine learning method. 
+For this project, we read some papers and online tutorials, basically related to the packages that we would use and theories about different machine learning method.
 
-Neural Networks (Capt Spencer Butt, August 22, 2017) provides the basic idea of artificial neural network and the application of ANN in the field of regression and classification. Multilabel classification with neuralnet package ( Michy Alice, Feb 15, 2017) demonstrates how to use nnet package to realize neural network in R which helps a lot for this project.
+Neural Networks (Capt Spencer Butt, August 22, 2017) provides the basic idea of artificial neural network and the application of ANN in the field of regression and classification. Multilabel classification with neuralnet package (Michy Alice, Feb 15, 2017) demonstrates how to use nnet package to realize neural network in R which helps a lot for this project.
 
-Credit Card Clients Predictive Analysis Modelling ( Praneet Ezekiel) analyzed the relationship of different features and picked the most important ones as factors to make up a random forest to do the prediction. 
+Introduction to Neural Networks, Advantages and Applications (Jahnavi Mahanta, July 10, 2017) illustrates the fundamental theory behind the implication of ANN model, from the mechanism to some basic mathematics knowledge. 
 
-UC Business Analytics R Programming Guide, Gradient Boosting Machines is quite a good guide for us to learn the usage of GBM in R language.
+H2O documentation provides the comprehensive introduction on the usage of h2o package, which is the main package in building the ANN model. Some clear examples and extensions are also included in this documentation. 
 
+Credit Card Clients Predictive Analysis Modelling (Praneet Ezekiel) analyzed the relationship of different features and picked the most important ones as factors to make up a random forest to do the prediction.
+
+UC Business Analytics R Programming Guide, Gradient Boosting Machines is quite a good guide for us to learn the usage of GBM in R language. A Gentle Introduction to XGBoost for Applied Machine Learning is a concise but pellucid guide of xgboost method used to do machine learning.
 
 
 ## Packages that we used
@@ -83,9 +86,14 @@ psych: This is a package for multivariate analysis and scale construction using 
 
 randomForest: THis is the package of realizing random forest training in R.It contains the methods of classification and regression based on a forest of trees using random inputs. We use this package to bulid the random forest model, predict the outcome and tune the parameters.
 
-gbm: This is the package of implementation of extensions to Freund and Schapire's AdaBoost algorithm and Friedman's gradient boosting machine. Here we use the function of bernoulli as the loss function and do the training of classification.
+gbm: This is the package of implementation of extensions to Freund and Schapire’s AdaBoost algorithm and Friedman’s gradient boosting machine. Here we use the function of bernoulli as the loss function and do the training of classification.
 
-pROC: This is the package we use to visualize, smooth and compare receiver operating characteristic and plot the ROC. I t can also be used to calculate the AUC which we used to compare the results of different models' performance.
+pROC: This is the package we use to visualize, smooth and compare receiver operating characteristic and plot the ROC. It can also be used to calculate the AUC which we used to compare the results of different models’ performance.
+
+h2o: This is an open source machine learning platform that offers parallelized implementations of many supervised and unsupervised machine learning algorithms. We use it to do the grid search, training and predicting of the deep learning model.
+
+shiny: This is the package makes it easy to build interactive web apps straight from R. We use it to visualize performance resulted from the change of hyper-parameters of three models. 
+
 
 ## Data Processing
 
@@ -250,7 +258,7 @@ ggplot(aes(x=default_flag,fill=AGE.group,title="Age group & Default 02"), data=d
 
 We can see that the 20-40 group accounts for a large propotion of the instances. And default rate in this group is slightly higher than 40-60 group, but diifference is minor. So, the younger the age, the more possible to default, but this pattern may still need further confirmation later in the project. 
 
-### *LIMIT_BAL and default_flag
+### *Limit_bal and default_flag
 
 ```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,fig.dim=c(7,5),out.width="400",fig.cap=c("Limit & Default 01","Limit & Default 02")}
 #1
@@ -364,6 +372,41 @@ For this project, we use three models to train the dataset and want to get the o
 For each model we use the same training dataset in order to make them comparable. And we also add the age group feature for the sake of it could be used to predict the default more accurately. The outcome varies for different models.
 
 ### ANN
+The first model we are going to use is the artificial neural network model (ANN), also known as deep learning model. ANN applies the mechanism of the brain to develop algorithms that can model and predict complex problems. The model we use with h2o is just a simple multi-layer feedforward artificial neural network, which is also the most common type.  The network contains one input layer, some hidden layers and one output layer, consisting of neurons with tanh, rectifier, and maxout activation functions.
+
+First, we split the data into train set and test set. In order to make the same dataset we set seed of 1121. We make 80% of data to be train set and the other 20% to be test set. So, we got 24000 rows of train set and 6000 rows of test set.
+
+Then, we use the grid search method in h2o package trying to find the best parameters, which are the hidden layers and activation function in this case.  Sorting by auc, we find the optimal model with the following parameters.
+
+<div>
+![ANN parameters](image/ann_para.png)
+</div>
+
+After finding the potential optimal model, we use this model to fit the train set. And then use the trained model to predict test set and having the predicted probability of labels. We transfer the probability to actual label with threshold of 0.5. Later, we check the performance of model on test set with confusion matrix, accuracy and AUC.
+
+<div>
+![ANN confusion](image/ann_ypred.png)
+</div>
+
+<div>
+![ANN Result](image/ann_result.png){width=400}
+</div>
+
+The AUC is 0.7642.
+
+Single one training set could accidentally favor one model over another.  In order to diminish that impact, we do a bootstrapping for every model. But due to the limitation of PC, large number of samplings are impossible. So, we only try 10 iterations for demonstration purpose. 
+
+<div>
+![ANN bootstrap](image/ann_boot.png)
+</div>
+
+We can see that the best accuracy and AUC have obvious increase relative to the previous result. The overall performance is also slightly better.  
+
+In order to present the dynamic performance of the ANN model, we created a shiny APP to show how the parameters change could influence the AUC of the model. (file ANN Performance) This is the screen cut of the shiny app:
+
+<div>
+![ANN performance](image/ann_perf.png)
+</div>
 
 ### Random Forest
 
@@ -464,11 +507,11 @@ So we chosed the model we trained with the original dataset to do a bootstrap an
 Further, we use package caret to tune the model parameters to see whether we could get the same result.
 
 
-We can get the result that the mean of test error from bootstrap of random forest is 0.1484833.
+We can get the result that the mean of test error from bootstrapping of random forest is 0.183583.
 
 ```{r table1,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE,out.width="400"}
 re_sult_rf <- read.csv("./result of random forest bootstrap.csv",header = TRUE,sep = ",")
-knitr::kable(re_sult_rf, caption = "Result of Bootstrap of Random Forest",format = "html",col.names = c("quantile  ","  test error"),)
+knitr::kable(re_sult_rf, caption = "Result of Bootstrap of Random Forest",format = "html",col.names = c("quantile ","  auc  ","  test error"))
 ```
 ### Gradient Boosting Machine
 
@@ -559,52 +602,32 @@ re_sult_gbm <- read.csv("./result of gbm boostrap.csv",header = TRUE,sep = ",")
 knitr::kable(re_sult_gbm, caption = "Result of Bootstrap of GBM with Original data",format = "html",col.names = c("quantile"," test error "," auc"))
 ```
 
-In order to present the dynamic performance of the GBM model, we created a shiny APP to show how the parameters change could influence the AUC of the model. (file GBM Performance)
+In order to present the dynamic performance of the GBM model, we created a shiny APP to show how the parameters change could influence the AUC of the model. (file GBM Performance) This is the screen cut of the shiny app of GBM performance:
 
-The result of GBM is not better than random forest for two reasons: First, our dataset contains 24 features to predict the default outcome, this structure requires the width of model to train but not that much on the depth of training. So that the deepening training method GBM fails to capture as many features as random forest; Second, random forest has the advantage of parallel computing which helps to train high dimension dataset but GBM links consequent trees orderly and can not be used to train parallelly. 
+<div>
+![GBM performance](image/GBM_perf.png)
+</div>
 
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
+The result of GBM is better than random forest because our dataset contains only 24 features to predict the default outcome, even though they do not have multicollinearity according to the result of PCA, they contains similar structure and information, this structure requires the depth of model to train but not that much on the width of training. 
 
-```
+## Further improvement of project
 
-
-
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
-
-```
-
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
-
-```
-
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
-
-```
-
-
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
-
-```
-
-
-
-
-
-```{r,eval=TRUE, echo=FALSE, cache=FALSE,warning=FALSE}
-
-```
-
+For this project, one of the improvements that we can realize is to try the method of Extreme Gradient Boost (xgboost). It is an implementation of gradient boosted decision trees designed for speed and performance. The implementation of the model supports the features of the scikit-learn and R implementations, with new additions like regularization. Three main forms of gradient boosting are supported: gradient boosting, stochastic gradient boosting and regularized gradient boosting. The implementation of the algorithm was engineered for efficiency of compute time and memory resources. A design goal was to make the best use of available resources to train the model. For our project, because the result of GBM is the best among all three models, we could suggest that the algorithm that counts on depth of training model would be more suitable and the application of xgboost model would be expected to perform well.
 
 ## Conclusion
 
+In this project, we first explore the data by visualizing the features and the relationship between them. Then, we try to use PCA method to reduce feature dimensions. But it turns out that the PCA is not suitable for this data set. So, we still use the original data only without ID column. Next, we investigate three most popular machine learning models: Artificial Neural Network, Random Forest and Gradient Boosting Machine. Base on that, we build shiny apps to visualize the change of performance when tuning the parameters. To eliminate the effect of randomness, we also implement bootstrapping to three models. For performance measure, we use Area Under the Curve in all three models in order to compare. In addition to AUC, some specific measures are applied in different models, such as test error and accuracy. The AUC score for total six scenarios are shown in the table below. 
+
+<div>
+![Model Comparison](image/model_comp.png)
+</div>
+
+The first thing we can see is that GBM has the highest number, meaning it is the optimal model by AUC score with this data set. There is another interesting finding. Although ANN and GBM both experience an improvement of AUC score by bootstrapping, random forest shows the opposite. It may because the random forest model trains each tree independently, using a random sample of the data. So, bootstrapping may actually cause overfitting to some point. 
+
+Besides the performance comparison, we find that the ANN is the easiest to implement and understand among all three models. Since our data set is not very complex, a simple ANN with two hidden layers is good enough to predicting binary class based on 24 features. 
 
 
 
-## Ideas about further development of project
 
 
 
